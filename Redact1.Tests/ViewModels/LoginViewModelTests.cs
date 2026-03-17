@@ -40,8 +40,8 @@ public class LoginViewModelTests : IDisposable
 
         vm.UseDemoCredentialsCommand.Execute(null);
 
-        vm.Email.Should().Be("clerk@pd.local");
-        vm.Password.Should().Be("test-password");
+        vm.Email.Should().Be("supervisor@test.com");
+        vm.Password.Should().Be("test123");
     }
 
     [Fact]

@@ -62,8 +62,8 @@ namespace Redact1.ViewModels
 
         private void UseDemoCredentials()
         {
-            Email = "clerk@pd.local";
-            Password = "test-password";
+            Email = "supervisor@test.com";
+            Password = "test123";
         }
     }
 }

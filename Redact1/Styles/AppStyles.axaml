@@ -43,6 +43,11 @@
     </Style>
     <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
         <Setter Property="Background" Value="{StaticResource PrimaryLightBrush}" />
+        <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.primary:pressed /template/ ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource PrimaryDarkBrush}" />
+        <Setter Property="Foreground" Value="White" />
     </Style>
 
     <!-- Secondary Button -->
@@ -56,6 +61,14 @@
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Cursor" Value="Hand" />
     </Style>
+    <Style Selector="Button.secondary:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource PrimaryBrush}" />
+        <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.secondary:pressed /template/ ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource PrimaryDarkBrush}" />
+        <Setter Property="Foreground" Value="White" />
+    </Style>
 
     <!-- Danger Button -->
     <Style Selector="Button.danger">
@@ -66,6 +79,14 @@
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Cursor" Value="Hand" />
     </Style>
+    <Style Selector="Button.danger:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#C53030" />
+        <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.danger:pressed /template/ ContentPresenter">
+        <Setter Property="Background" Value="#9B2C2C" />
+        <Setter Property="Foreground" Value="White" />
+    </Style>
 
     <!-- Icon Button -->
     <Style Selector="Button.icon">
@@ -73,6 +94,10 @@
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
         <Setter Property="Padding" Value="8" />
         <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.icon:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource BackgroundBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource PrimaryBrush}" />
     </Style>
 
     <!-- Modern TextBox -->

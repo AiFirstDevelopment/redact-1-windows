@@ -52,6 +52,7 @@
                            Foreground="{StaticResource TextPrimaryBrush}"
                            Margin="0,0,0,8" />
                 <TextBox x:Name="PasswordBox"
+                         Text="{Binding Password}"
                          PasswordChar="*"
                          Classes="modern"
                          Margin="0,0,0,24" />

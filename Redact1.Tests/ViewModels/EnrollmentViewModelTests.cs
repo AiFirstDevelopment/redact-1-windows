@@ -38,7 +38,7 @@ public class EnrollmentViewModelTests : IDisposable
 
         vm.UseDemoCommand.Execute(null);
 
-        vm.DepartmentCode.Should().Be("DEMO");
+        vm.DepartmentCode.Should().Be("SPRINGFIELD-PD");
     }
 
     [Fact]

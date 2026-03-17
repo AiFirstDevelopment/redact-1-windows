@@ -3,6 +3,18 @@
              x:Class="Redact1.Views.FileReviewView"
              Background="#1A1A1A">
 
+    <UserControl.Styles>
+        <!-- Toolbar button hover style - keeps text readable -->
+        <Style Selector="Button.toolbar-btn:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#40FFFFFF" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="Button.toolbar-btn:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="#60FFFFFF" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+    </UserControl.Styles>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -23,7 +35,7 @@
 
                 <Button Grid.Column="0"
                         Content="Close"
-                        Classes="secondary"
+                        Classes="secondary toolbar-btn"
                         Background="Transparent"
                         Foreground="White"
                         BorderBrush="White"
@@ -38,7 +50,7 @@
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
                     <Button Content="Run Detection"
-                            Classes="secondary"
+                            Classes="secondary toolbar-btn"
                             Background="Transparent"
                             Foreground="White"
                             BorderBrush="White"
@@ -46,7 +58,7 @@
                             Margin="0,0,8,0" />
 
                     <Button Content="Draw Redaction"
-                            Classes="secondary"
+                            Classes="secondary toolbar-btn"
                             Background="Transparent"
                             Foreground="White"
                             BorderBrush="White"

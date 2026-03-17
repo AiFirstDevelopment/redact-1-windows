@@ -68,7 +68,7 @@ namespace Redact1.ViewModels
 
         private void UseDemo()
         {
-            DepartmentCode = "DEMO";
+            DepartmentCode = "SPRINGFIELD-PD";
         }
     }
 }
