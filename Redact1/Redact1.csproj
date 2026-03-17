@@ -23,9 +23,6 @@
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.1.0" />
     <PackageReference Include="Avalonia.ReactiveUI" Version="11.1.0" />
     <PackageReference Include="Avalonia.Diagnostics" Version="11.1.0" Condition="'$(Configuration)' == 'Debug'" />
-    <PackageReference Include="OpenCvSharp4" Version="4.8.0.20230708" />
-    <PackageReference Include="OpenCvSharp4.runtime.osx_arm64" Version="4.8.0.20230708" />
-    <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.8.0.20230708" />
     <PackageReference Include="PDFtoImage" Version="5.2.0" />
     <PackageReference Include="ReactiveUI" Version="20.1.1" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
@@ -42,6 +39,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="haarcascade_frontalface_default.xml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="detect_faces.py">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.Text.RegularExpressions;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
-using OpenCvSharp;
 
 namespace Redact1.Services
 {
@@ -453,7 +452,7 @@ namespace Redact1.Services
         }
 
         /// <summary>
-        /// Detect faces in image using OpenCV Haar cascade
+        /// Detect faces in image using Python OpenCV (via subprocess)
         /// </summary>
         private async Task<List<CreateDetectionRequest>> DetectFacesAsync(byte[] imageData)
         {
@@ -465,80 +464,104 @@ namespace Redact1.Services
                 return detections;
             }
 
+            var pythonScript = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "detect_faces.py");
+            if (!File.Exists(pythonScript))
+            {
+                Console.WriteLine("[Detection] Python face detection script not found");
+                return detections;
+            }
+
             try
             {
-                await Task.Run(() =>
+                var tempPath = Path.Combine(Path.GetTempPath(), $"face_input_{Guid.NewGuid()}.png");
+                try
                 {
-                    // Save image to temp file for OpenCV
-                    var tempPath = Path.Combine(Path.GetTempPath(), $"opencv_input_{Guid.NewGuid()}.png");
-                    try
+                    await File.WriteAllBytesAsync(tempPath, imageData);
+
+                    var psi = new ProcessStartInfo("python3", $"\"{pythonScript}\" \"{tempPath}\" \"{_faceCascadePath}\"")
                     {
-                        File.WriteAllBytes(tempPath, imageData);
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
 
-                        using var mat = Cv2.ImRead(tempPath, ImreadModes.Color);
-                        if (mat.Empty())
+                    using var process = Process.Start(psi);
+                    if (process == null)
+                    {
+                        Console.WriteLine("[Detection] Failed to start Python process");
+                        return detections;
+                    }
+
+                    var output = await process.StandardOutput.ReadToEndAsync();
+                    await process.WaitForExitAsync();
+
+                    if (process.ExitCode != 0)
+                    {
+                        var error = await process.StandardError.ReadToEndAsync();
+                        Console.WriteLine($"[Detection] Python error: {error}");
+                        return detections;
+                    }
+
+                    // Parse JSON output
+                    var result = System.Text.Json.JsonSerializer.Deserialize<FaceDetectionResult>(output);
+                    if (result?.Faces != null)
+                    {
+                        Console.WriteLine($"[Detection] Found {result.Faces.Count} faces");
+
+                        foreach (var face in result.Faces)
                         {
-                            Console.WriteLine("[Detection] Failed to load image for face detection");
-                            return;
-                        }
-
-                        var imageWidth = mat.Width;
-                        var imageHeight = mat.Height;
-
-                        using var grayMat = new Mat();
-                        Cv2.CvtColor(mat, grayMat, ColorConversionCodes.BGR2GRAY);
-                        Cv2.EqualizeHist(grayMat, grayMat);
-
-                        using var faceCascade = new CascadeClassifier(_faceCascadePath);
-                        var faces = faceCascade.DetectMultiScale(
-                            grayMat,
-                            scaleFactor: 1.1,
-                            minNeighbors: 5,
-                            flags: HaarDetectionTypes.ScaleImage,
-                            minSize: new OpenCvSharp.Size(30, 30)
-                        );
-
-                        Console.WriteLine($"[Detection] Found {faces.Length} faces");
-
-                        foreach (var face in faces)
-                        {
-                            // Convert to normalized coordinates (0-1)
-                            var x = (double)face.X / imageWidth;
-                            var y = (double)face.Y / imageHeight;
-                            var width = (double)face.Width / imageWidth;
-                            var height = (double)face.Height / imageHeight;
-
                             // Y flip for PDF coordinates
-                            var flippedY = 1.0 - y - height;
+                            var flippedY = 1.0 - face.Y - face.Height;
 
-                            lock (detections)
+                            detections.Add(new CreateDetectionRequest
                             {
-                                detections.Add(new CreateDetectionRequest
-                                {
-                                    DetectionType = "face",
-                                    TextContent = "Face detected",
-                                    BboxX = x,
-                                    BboxY = flippedY,
-                                    BboxWidth = width,
-                                    BboxHeight = height,
-                                    Confidence = 0.85
-                                });
-                            }
+                                DetectionType = "face",
+                                TextContent = "Face detected",
+                                BboxX = face.X,
+                                BboxY = flippedY,
+                                BboxWidth = face.Width,
+                                BboxHeight = face.Height,
+                                Confidence = 0.85
+                            });
                         }
                     }
-                    finally
-                    {
-                        try { File.Delete(tempPath); } catch { }
-                    }
-                });
+                }
+                finally
+                {
+                    try { File.Delete(tempPath); } catch { }
+                }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[Detection] Face detection error: {ex.Message}");
-                Console.WriteLine($"[Detection] Stack: {ex.StackTrace}");
             }
 
             return detections;
+        }
+
+        private class FaceDetectionResult
+        {
+            [System.Text.Json.Serialization.JsonPropertyName("faces")]
+            public List<FaceBox>? Faces { get; set; }
+
+            [System.Text.Json.Serialization.JsonPropertyName("count")]
+            public int Count { get; set; }
+        }
+
+        private class FaceBox
+        {
+            [System.Text.Json.Serialization.JsonPropertyName("x")]
+            public double X { get; set; }
+
+            [System.Text.Json.Serialization.JsonPropertyName("y")]
+            public double Y { get; set; }
+
+            [System.Text.Json.Serialization.JsonPropertyName("width")]
+            public double Width { get; set; }
+
+            [System.Text.Json.Serialization.JsonPropertyName("height")]
+            public double Height { get; set; }
         }
     }
 }

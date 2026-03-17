@@ -37,6 +37,14 @@
                            VerticalAlignment="Center" />
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button Content="Run Detection"
+                            Classes="secondary"
+                            Background="Transparent"
+                            Foreground="White"
+                            BorderBrush="White"
+                            Command="{Binding RunDetectionCommand}"
+                            Margin="0,0,8,0" />
+
                     <Button Content="Draw Redaction"
                             Classes="secondary"
                             Background="Transparent"

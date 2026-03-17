@@ -457,4 +457,72 @@ public class DetectionServiceTests
 
         result.Should().NotBeNull();
     }
+
+    [Fact]
+    public async Task DetectInImageAsync_WithValidPng_ReturnsDetections()
+    {
+        // Minimal valid PNG (1x1 pixel)
+        var imageData = new byte[]
+        {
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+            0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+            0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE, 0x00, 0x00, 0x00,
+            0x0C, 0x49, 0x44, 0x41, 0x54, 0x08, 0xD7, 0x63, 0x60, 0x60, 0x60, 0x00,
+            0x00, 0x00, 0x04, 0x00, 0x01, 0x5C, 0xCD, 0xFF, 0x69, 0x00, 0x00, 0x00,
+            0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82
+        };
+
+        var result = await _service.DetectInImageAsync(imageData);
+
+        // Should return a list (may be empty for tiny image with no text/faces)
+        result.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task DetectInPdfPageAsync_SetsCorrectPageNumber()
+    {
+        var imageData = new byte[] { 0x00 };
+        var pageNumber = 3;
+
+        var result = await _service.DetectInPdfPageAsync(imageData, pageNumber);
+
+        result.Should().NotBeNull();
+        foreach (var detection in result)
+        {
+            detection.PageNumber.Should().Be(pageNumber);
+        }
+    }
+
+    [Fact]
+    public void DetectPiiInText_DetectsName_DoesNotFalsePositive()
+    {
+        // Names should NOT be detected as PII by our pattern-based detection
+        var text = "John Smith is a customer";
+
+        var result = _service.DetectPiiInText(text);
+
+        // Names are not detected by our regex patterns
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void DetectPiiInText_HandlesSpecialCharacters()
+    {
+        var text = "Email: test+tag@example.com, Phone: (555) 123-4567";
+
+        var result = _service.DetectPiiInText(text);
+
+        result.Should().Contain(d => d.DetectionType == "email");
+        result.Should().Contain(d => d.DetectionType == "phone");
+    }
+
+    [Fact]
+    public void DetectPiiInText_DetectsMultipleSameType()
+    {
+        var text = "SSN1: 123-45-6789 and SSN2: 987-65-4321 and SSN3: 111-22-3333";
+
+        var result = _service.DetectPiiInText(text);
+
+        result.Where(d => d.DetectionType == "ssn").Should().HaveCount(3);
+    }
 }

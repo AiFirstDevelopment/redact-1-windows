@@ -158,13 +158,6 @@ namespace Redact1.ViewModels
 
                 await LoadDetectionsAsync();
                 Console.WriteLine($"[FileReview] Load complete, {Detections.Count} detections");
-
-                // Auto-detect if no detections exist (like iOS app)
-                if (Detections.Count == 0)
-                {
-                    Console.WriteLine("[FileReview] No detections found, running auto-detection...");
-                    await RunDetectionAsync();
-                }
             }
             catch (Exception ex)
             {

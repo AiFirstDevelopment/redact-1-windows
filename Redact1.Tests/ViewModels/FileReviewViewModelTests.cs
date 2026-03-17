@@ -1121,7 +1121,7 @@ public class FileReviewViewModelTests : IDisposable
     }
 
     [AvaloniaFact]
-    public async Task LoadFileAsync_WithNoDetections_TriggersAutoDetection()
+    public async Task LoadFileAsync_WithNoDetections_DoesNotAutoDetect()
     {
         // Setup empty detections from API
         _services.MockApi.Setup(x => x.GetDetectionsAsync(It.IsAny<string>()))
@@ -1130,29 +1130,19 @@ public class FileReviewViewModelTests : IDisposable
                 Detections = new List<Detection>(),
                 ManualRedactions = new List<ManualRedaction>()
             });
-        _services.MockApi.Setup(x => x.ClearDetectionsAsync(It.IsAny<string>()))
-            .Returns(Task.CompletedTask);
-        _services.MockApi.Setup(x => x.CreateDetectionsAsync(It.IsAny<string>(), It.IsAny<List<CreateDetectionRequest>>()))
-            .ReturnsAsync(new List<Detection>());
 
         var vm = _services.GetService<FileReviewViewModel>();
-        vm.File = MockApiService.CreateTestFile(isPdf: false);
-
-        // Set private _originalFileData field via reflection
-        var field = vm.GetType().GetField("_originalFileData",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        field!.SetValue(vm, GetMinimalPngBytes());
 
         // Call LoadFileAsync
         await vm.LoadFileAsync("file-123");
-        await Task.Delay(500);
+        await Task.Delay(200);
 
-        // Auto-detection should have been triggered (ClearDetections is called)
-        _services.MockApi.Verify(x => x.ClearDetectionsAsync("file-123"), Times.AtLeastOnce);
+        // Auto-detection should NOT be triggered (user must click Run Detection)
+        _services.MockApi.Verify(x => x.ClearDetectionsAsync(It.IsAny<string>()), Times.Never);
     }
 
-    [Fact]
-    public async Task LoadFileAsync_WithExistingDetections_DoesNotTriggerAutoDetection()
+    [AvaloniaFact]
+    public async Task LoadFileAsync_WithExistingDetections_LoadsDetections()
     {
         // Setup existing detections from API
         var existingDetection = MockApiService.CreateTestDetection();
@@ -1168,8 +1158,16 @@ public class FileReviewViewModelTests : IDisposable
         await vm.LoadFileAsync("file-123");
         await Task.Delay(200);
 
-        // Auto-detection should NOT have been triggered (ClearDetections is not called)
-        _services.MockApi.Verify(x => x.ClearDetectionsAsync(It.IsAny<string>()), Times.Never);
+        // Detections should be loaded (1 from API)
+        vm.Detections.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void RunDetectionCommand_IsNotNull()
+    {
+        var vm = _services.GetService<FileReviewViewModel>();
+
+        vm.RunDetectionCommand.Should().NotBeNull();
     }
 
     [Fact]
