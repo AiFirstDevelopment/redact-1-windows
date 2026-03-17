@@ -13,8 +13,8 @@ namespace Redact1
 {
     public partial class App : Application
     {
-        public static IServiceProvider Services { get; private set; } = null!;
-        public static AppSettings Settings { get; private set; } = null!;
+        public static IServiceProvider Services { get; internal set; } = null!;
+        public static AppSettings Settings { get; internal set; } = null!;
 
         public override void Initialize()
         {
