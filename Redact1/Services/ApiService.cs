@@ -126,13 +126,15 @@ namespace Redact1.Services
             if (!string.IsNullOrEmpty(status)) query.Add($"status={Uri.EscapeDataString(status)}");
             if (!string.IsNullOrEmpty(search)) query.Add($"search={Uri.EscapeDataString(search)}");
             var queryString = query.Count > 0 ? "?" + string.Join("&", query) : "";
-            return await GetAsync<List<RecordsRequest>>($"/requests{queryString}");
+            var response = await GetAsync<RequestsListResponse>($"/requests{queryString}");
+            return response.Requests;
         }
 
         public async Task<List<RecordsRequest>> GetArchivedRequestsAsync(string? search = null)
         {
             var queryString = !string.IsNullOrEmpty(search) ? $"?search={Uri.EscapeDataString(search)}" : "";
-            return await GetAsync<List<RecordsRequest>>($"/requests/archived{queryString}");
+            var response = await GetAsync<RequestsListResponse>($"/requests/archived{queryString}");
+            return response.Requests;
         }
 
         public async Task<RecordsRequest> CreateRequestAsync(CreateRequestPayload request)

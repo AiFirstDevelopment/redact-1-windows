@@ -53,11 +53,26 @@
             </ComboBox>
         </Grid>
 
+        <!-- Error Message -->
+        <Border Grid.Row="2"
+                Background="#FEE2E2"
+                CornerRadius="8"
+                Padding="12"
+                Margin="0,0,0,12"
+                VerticalAlignment="Top"
+                IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <TextBlock Text="{Binding ErrorMessage}"
+                       Foreground="#DC2626"
+                       FontSize="13"
+                       TextWrapping="Wrap"/>
+        </Border>
+
         <!-- Loading -->
         <ProgressBar Grid.Row="2"
                      IsIndeterminate="True"
                      Height="4"
                      VerticalAlignment="Top"
+                     Margin="0,50,0,0"
                      IsVisible="{Binding IsLoading}" />
 
         <!-- Requests List -->

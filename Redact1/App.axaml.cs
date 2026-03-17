@@ -51,12 +51,13 @@ namespace Redact1
         {
             var services = new ServiceCollection();
 
-            // Services
-            services.AddHttpClient<IApiService, ApiService>(client =>
+            // Services - ApiService must be singleton to preserve auth token
+            var httpClient = new HttpClient
             {
-                client.BaseAddress = new Uri(Settings.ApiSettings.BaseUrl);
-                client.Timeout = TimeSpan.FromMinutes(5);
-            });
+                BaseAddress = new Uri(Settings.ApiSettings.BaseUrl),
+                Timeout = TimeSpan.FromMinutes(5)
+            };
+            services.AddSingleton<IApiService>(new ApiService(httpClient));
 
             services.AddSingleton<IAuthService, AuthService>();
             services.AddSingleton<IDetectionService, DetectionService>();

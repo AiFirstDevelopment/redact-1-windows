@@ -95,6 +95,10 @@ namespace Redact1.ViewModels
 
         private async Task CreateRequestAsync()
         {
+            Console.WriteLine("CreateRequestAsync called");
+            IsLoading = true;
+            ClearError();
+
             var requestNumber = $"FOIA-{DateTime.Now:yyyyMMdd}-{new Random().Next(1000, 9999)}";
             var payload = new CreateRequestPayload
             {
@@ -105,13 +109,20 @@ namespace Redact1.ViewModels
 
             try
             {
+                Console.WriteLine($"Creating request: {requestNumber}");
                 var request = await _apiService.CreateRequestAsync(payload);
+                Console.WriteLine($"Request created: {request.Id}");
                 Requests.Insert(0, request);
                 RequestSelected?.Invoke(this, request);
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"Error creating request: {ex.Message}");
                 SetError(ex);
+            }
+            finally
+            {
+                IsLoading = false;
             }
         }
 

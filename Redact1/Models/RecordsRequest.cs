@@ -73,4 +73,10 @@ namespace Redact1.Models
         [JsonPropertyName("status")]
         public string? Status { get; set; }
     }
+
+    public class RequestsListResponse
+    {
+        [JsonPropertyName("requests")]
+        public List<RecordsRequest> Requests { get; set; } = new();
+    }
 }
