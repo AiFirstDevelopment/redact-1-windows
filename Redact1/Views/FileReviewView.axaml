@@ -1,273 +1,123 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Redact1.Views.FileReviewView"
-             Background="{StaticResource BackgroundBrush}">
+             Background="#1A1A1A">
 
     <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="350" />
-        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
 
-        <!-- Image/PDF Viewer -->
-        <Grid Grid.Column="0" Background="#1A1A1A">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
+        <!-- Toolbar -->
+        <Border Grid.Row="0"
+                Background="{StaticResource PrimaryBrush}"
+                Padding="16,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
 
-            <!-- Toolbar -->
-            <Border Grid.Row="0"
-                    Background="{StaticResource PrimaryBrush}"
-                    Padding="16,12">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
+                <Button Grid.Column="0"
+                        Content="Close"
+                        Classes="secondary"
+                        Background="Transparent"
+                        Foreground="White"
+                        BorderBrush="White"
+                        x:Name="CloseButton" />
 
-                    <Button Grid.Column="0"
-                            Content="Close"
+                <TextBlock Grid.Column="1"
+                           Text="{Binding File.Filename}"
+                           Foreground="White"
+                           FontWeight="SemiBold"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center" />
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button Content="Draw Redaction"
                             Classes="secondary"
                             Background="Transparent"
                             Foreground="White"
                             BorderBrush="White"
-                            x:Name="CloseButton" />
+                            Command="{Binding ToggleDrawingModeCommand}"
+                            Margin="0,0,8,0" />
 
-                    <TextBlock Grid.Column="1"
-                               Text="{Binding File.Filename}"
-                               Foreground="White"
-                               FontWeight="SemiBold"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center" />
-
-                    <StackPanel Grid.Column="2" Orientation="Horizontal">
-                        <Button Content="Draw Redaction"
-                                Classes="secondary"
-                                Background="Transparent"
-                                Foreground="White"
-                                BorderBrush="White"
-                                Command="{Binding ToggleDrawingModeCommand}"
-                                Margin="0,0,8,0" />
-
-                        <Button Content="Preview"
-                                Classes="secondary"
-                                Background="Transparent"
-                                Foreground="White"
-                                BorderBrush="White"
-                                Command="{Binding PreviewRedactedCommand}"
-                                Margin="0,0,8,0" />
-
-                        <Button Content="Save Redacted"
-                                Classes="primary"
-                                Background="{StaticResource SuccessBrush}"
-                                Command="{Binding SaveRedactedCommand}" />
-                    </StackPanel>
-                </Grid>
-            </Border>
-
-            <!-- Image Display -->
-            <ScrollViewer Grid.Row="1"
-                          HorizontalScrollBarVisibility="Auto"
-                          VerticalScrollBarVisibility="Auto">
-                <Grid x:Name="ImageContainer">
-                    <Image x:Name="DisplayImage"
-                           Source="{Binding DisplayImage}"
-                           Stretch="Uniform"
-                           IsVisible="{Binding !ShowRedacted}" />
-
-                    <Image Source="{Binding RedactedImage}"
-                           Stretch="Uniform"
-                           IsVisible="{Binding ShowRedacted}" />
-
-                    <Canvas x:Name="OverlayCanvas"
-                            PointerPressed="Canvas_PointerPressed"
-                            PointerMoved="Canvas_PointerMoved"
-                            PointerReleased="Canvas_PointerReleased" />
-                </Grid>
-            </ScrollViewer>
-
-            <!-- PDF Navigation -->
-            <Border Grid.Row="2"
-                    Background="{StaticResource SurfaceBrush}"
-                    Padding="16">
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                    <Button Content="Previous"
-                            Classes="secondary"
-                            Command="{Binding PreviousPageCommand}"
-                            Margin="0,0,16,0" />
-
-                    <TextBlock VerticalAlignment="Center">
-                        <Run Text="Page " />
-                        <Run Text="{Binding CurrentPage}" />
-                        <Run Text=" of " />
-                        <Run Text="{Binding TotalPages}" />
-                    </TextBlock>
-
-                    <Button Content="Next"
-                            Classes="secondary"
-                            Command="{Binding NextPageCommand}"
-                            Margin="16,0,0,0" />
+                    <Button Content="Save Redacted"
+                            Classes="primary"
+                            Background="{StaticResource SuccessBrush}"
+                            Command="{Binding SaveRedactedCommand}" />
                 </StackPanel>
-            </Border>
-        </Grid>
-
-        <!-- Detections Panel -->
-        <Border Grid.Column="1"
-                Background="{StaticResource SurfaceBrush}"
-                BorderBrush="{StaticResource BorderBrush}"
-                BorderThickness="1,0,0,0">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-
-                <!-- Detection Header -->
-                <Border Grid.Row="0"
-                        BorderBrush="{StaticResource BorderBrush}"
-                        BorderThickness="0,0,0,1"
-                        Padding="16">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-
-                        <TextBlock Text="Detections" FontSize="16" FontWeight="SemiBold" />
-
-                        <Button Grid.Column="1"
-                                Content="Run Detection"
-                                Classes="primary"
-                                Command="{Binding RunDetectionCommand}"
-                                IsEnabled="{Binding !IsDetecting}" />
-                    </Grid>
-                </Border>
-
-                <!-- Bulk Actions -->
-                <Border Grid.Row="1"
-                        BorderBrush="{StaticResource BorderBrush}"
-                        BorderThickness="0,0,0,1"
-                        Padding="16,12">
-                    <Button Content="Approve All Pending"
-                            Classes="secondary"
-                            Command="{Binding ApproveAllCommand}"
-                            HorizontalAlignment="Left" />
-                </Border>
-
-                <!-- Detection List -->
-                <ScrollViewer Grid.Row="2">
-                    <StackPanel>
-                        <ItemsControl ItemsSource="{Binding Detections}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Classes="list-item">
-                                        <Grid>
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto" />
-                                                <RowDefinition Height="Auto" />
-                                            </Grid.RowDefinitions>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-
-                                            <StackPanel Grid.Row="0" Grid.Column="0">
-                                                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
-                                                <TextBlock Text="{Binding TextContent}"
-                                                           Foreground="{StaticResource TextSecondaryBrush}"
-                                                           FontSize="12"
-                                                           IsVisible="{Binding TextContent, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                                            </StackPanel>
-
-                                            <Border Grid.Row="0" Grid.Column="1"
-                                                    Padding="8,4"
-                                                    CornerRadius="4"
-                                                    Background="#F7FAFC">
-                                                <TextBlock Text="{Binding Status}" FontSize="12" />
-                                            </Border>
-
-                                            <StackPanel Grid.Row="1" Grid.ColumnSpan="2"
-                                                        Orientation="Horizontal"
-                                                        Margin="0,8,0,0">
-                                                <Button Content="Approve"
-                                                        Classes="secondary"
-                                                        Foreground="{StaticResource SuccessBrush}"
-                                                        BorderBrush="{StaticResource SuccessBrush}"
-                                                        Padding="12,6"
-                                                        Command="{Binding $parent[UserControl].DataContext.ApproveDetectionCommand}"
-                                                        CommandParameter="{Binding}"
-                                                        Margin="0,0,8,0" />
-
-                                                <Button Content="Reject"
-                                                        Classes="secondary"
-                                                        Foreground="{StaticResource ErrorBrush}"
-                                                        BorderBrush="{StaticResource ErrorBrush}"
-                                                        Padding="12,6"
-                                                        Command="{Binding $parent[UserControl].DataContext.RejectDetectionCommand}"
-                                                        CommandParameter="{Binding}" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                        <!-- Manual Redactions -->
-                        <TextBlock Text="Manual Redactions"
-                                   FontWeight="SemiBold"
-                                   Margin="16,16,16,8"
-                                   IsVisible="{Binding ManualRedactions.Count}" />
-
-                        <ItemsControl ItemsSource="{Binding ManualRedactions}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Classes="list-item">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-
-                                            <TextBlock Text="Manual Redaction" FontWeight="Medium" />
-
-                                            <Button Grid.Column="1"
-                                                    Content="Remove"
-                                                    Classes="icon"
-                                                    Foreground="{StaticResource ErrorBrush}"
-                                                    Command="{Binding $parent[UserControl].DataContext.DeleteManualRedactionCommand}"
-                                                    CommandParameter="{Binding}" />
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </ScrollViewer>
-
-                <!-- Loading -->
-                <Border Grid.RowSpan="3"
-                        Background="#80FFFFFF"
-                        IsVisible="{Binding IsLoading}">
-                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                        <ProgressBar IsIndeterminate="True" Width="150" Height="4" />
-                        <TextBlock Text="Processing..." Margin="0,12,0,0" HorizontalAlignment="Center" />
-                    </StackPanel>
-                </Border>
-
-                <!-- Detecting -->
-                <Border Grid.RowSpan="3"
-                        Background="#80FFFFFF"
-                        IsVisible="{Binding IsDetecting}">
-                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                        <ProgressBar IsIndeterminate="True" Width="150" Height="4" />
-                        <TextBlock Text="Detecting sensitive content..." Margin="0,12,0,0" HorizontalAlignment="Center" />
-                    </StackPanel>
-                </Border>
             </Grid>
+        </Border>
+
+        <!-- PDF/Image Display -->
+        <ScrollViewer Grid.Row="1"
+                      HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Auto"
+                      Background="#1A1A1A">
+            <Grid x:Name="ImageContainer">
+                <Image x:Name="DisplayImage"
+                       Source="{Binding DisplayImage}"
+                       Stretch="Uniform"
+                       IsVisible="{Binding !ShowRedacted}" />
+
+                <Image Source="{Binding RedactedImage}"
+                       Stretch="Uniform"
+                       IsVisible="{Binding ShowRedacted}" />
+
+                <Canvas x:Name="OverlayCanvas"
+                        PointerPressed="Canvas_PointerPressed"
+                        PointerMoved="Canvas_PointerMoved"
+                        PointerReleased="Canvas_PointerReleased" />
+            </Grid>
+        </ScrollViewer>
+
+        <!-- PDF Navigation -->
+        <Border Grid.Row="2"
+                Background="{StaticResource SurfaceBrush}"
+                Padding="16"
+                IsVisible="{Binding File.IsPdf}">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <Button Content="Previous"
+                        Classes="secondary"
+                        Command="{Binding PreviousPageCommand}"
+                        Margin="0,0,16,0" />
+
+                <TextBlock VerticalAlignment="Center">
+                    <Run Text="Page " />
+                    <Run Text="{Binding CurrentPage}" />
+                    <Run Text=" of " />
+                    <Run Text="{Binding TotalPages}" />
+                </TextBlock>
+
+                <Button Content="Next"
+                        Classes="secondary"
+                        Command="{Binding NextPageCommand}"
+                        Margin="16,0,0,0" />
+            </StackPanel>
+        </Border>
+
+        <!-- Loading Overlay -->
+        <Border Grid.RowSpan="3"
+                Background="#80000000"
+                IsVisible="{Binding IsLoading}">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                <ProgressBar IsIndeterminate="True" Width="150" Height="4" />
+                <TextBlock Text="Processing..." Foreground="White" Margin="0,12,0,0" HorizontalAlignment="Center" />
+            </StackPanel>
+        </Border>
+
+        <!-- Detecting Overlay -->
+        <Border Grid.RowSpan="3"
+                Background="#80000000"
+                IsVisible="{Binding IsDetecting}">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                <ProgressBar IsIndeterminate="True" Width="150" Height="4" />
+                <TextBlock Text="Detecting sensitive content..." Foreground="White" Margin="0,12,0,0" HorizontalAlignment="Center" />
+            </StackPanel>
         </Border>
     </Grid>
 </UserControl>

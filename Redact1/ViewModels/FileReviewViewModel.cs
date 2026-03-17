@@ -7,7 +7,7 @@ using System.Windows.Input;
 
 namespace Redact1.ViewModels
 {
-    public class FileReviewViewModel : ViewModelBase
+    public class FileReviewViewModel : ViewModelBase, IDisposable
     {
         private readonly IApiService _apiService;
         private readonly IDetectionService _detectionService;
@@ -15,6 +15,8 @@ namespace Redact1.ViewModels
 
         private byte[]? _originalFileData;
         private byte[]? _redactedFileData;
+        private MemoryStream? _displayImageStream;
+        private MemoryStream? _redactedImageStream;
 
         private EvidenceFile? _file;
         private ObservableCollection<Detection> _detections = new();
@@ -136,12 +138,17 @@ namespace Redact1.ViewModels
 
             try
             {
+                Console.WriteLine($"[FileReview] Loading file: {fileId}");
                 File = await _apiService.GetFileAsync(fileId);
+                Console.WriteLine($"[FileReview] Got file metadata: {File?.Filename}");
+
                 _originalFileData = await _apiService.GetOriginalFileAsync(fileId);
+                Console.WriteLine($"[FileReview] Got file data: {_originalFileData?.Length ?? 0} bytes");
 
                 if (File.IsPdf)
                 {
                     TotalPages = _redactionService.GetPdfPageCount(_originalFileData);
+                    Console.WriteLine($"[FileReview] PDF has {TotalPages} pages");
                     await LoadPdfPage(1);
                 }
                 else
@@ -150,9 +157,19 @@ namespace Redact1.ViewModels
                 }
 
                 await LoadDetectionsAsync();
+                Console.WriteLine($"[FileReview] Load complete, {Detections.Count} detections");
+
+                // Auto-detect if no detections exist (like iOS app)
+                if (Detections.Count == 0)
+                {
+                    Console.WriteLine("[FileReview] No detections found, running auto-detection...");
+                    await RunDetectionAsync();
+                }
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"[FileReview] ERROR: {ex.Message}");
+                Console.WriteLine($"[FileReview] Stack: {ex.StackTrace}");
                 SetError(ex);
             }
             finally
@@ -167,8 +184,8 @@ namespace Redact1.ViewModels
 
             await Task.Run(() =>
             {
-                using var ms = new MemoryStream(_originalFileData);
-                var bitmap = new Bitmap(ms);
+                _displayImageStream = new MemoryStream(_originalFileData);
+                var bitmap = new Bitmap(_displayImageStream);
 
                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 {
@@ -181,10 +198,14 @@ namespace Redact1.ViewModels
         {
             if (_originalFileData == null) return;
 
+            Console.WriteLine($"[FileReview] Rendering PDF page {pageNumber}");
             var pageImage = await _redactionService.RenderPdfPageToImageAsync(_originalFileData, pageNumber);
+            Console.WriteLine($"[FileReview] Got page image: {pageImage?.Length ?? 0} bytes");
 
-            using var ms = new MemoryStream(pageImage);
-            DisplayImage = new Bitmap(ms);
+            _displayImageStream?.Dispose();
+            _displayImageStream = new MemoryStream(pageImage);
+            DisplayImage = new Bitmap(_displayImageStream);
+            Console.WriteLine($"[FileReview] DisplayImage set, size: {DisplayImage?.PixelSize.Width}x{DisplayImage?.PixelSize.Height}");
             CurrentPage = pageNumber;
         }
 
@@ -194,11 +215,14 @@ namespace Redact1.ViewModels
 
             try
             {
+                Console.WriteLine($"[FileReview] Loading detections for file {File.Id}...");
                 var result = await _apiService.GetDetectionsAsync(File.Id);
+                Console.WriteLine($"[FileReview] API returned {result.Detections.Count} detections, {result.ManualRedactions.Count} manual redactions");
 
                 Detections.Clear();
                 foreach (var detection in result.Detections)
                 {
+                    Console.WriteLine($"[FileReview] Detection: {detection.DetectionType} @ ({detection.BboxX},{detection.BboxY}) - HasBbox: {detection.HasBoundingBox}");
                     Detections.Add(detection);
                 }
 
@@ -230,30 +254,53 @@ namespace Redact1.ViewModels
 
                 if (File.IsImage)
                 {
+                    Console.WriteLine("[Detection] Running image detection...");
                     var detected = await _detectionService.DetectInImageAsync(_originalFileData);
+                    Console.WriteLine($"[Detection] Image found {detected.Count} detections");
                     allDetections.AddRange(detected);
                 }
                 else if (File.IsPdf)
                 {
+                    Console.WriteLine($"[Detection] Running PDF detection on {TotalPages} pages...");
                     for (int page = 1; page <= TotalPages; page++)
                     {
+                        Console.WriteLine($"[Detection] Processing page {page}...");
                         var pageImage = await _redactionService.RenderPdfPageToImageAsync(_originalFileData, page);
+                        Console.WriteLine($"[Detection] Page {page} rendered, {pageImage?.Length ?? 0} bytes");
                         var detected = await _detectionService.DetectInPdfPageAsync(pageImage, page);
+                        Console.WriteLine($"[Detection] Page {page} found {detected.Count} detections");
                         allDetections.AddRange(detected);
                     }
                 }
 
+                Console.WriteLine($"[Detection] Total detections: {allDetections.Count}");
                 if (allDetections.Count > 0)
                 {
+                    // Log first detection for debugging
+                    var first = allDetections[0];
+                    Console.WriteLine($"[Detection] First detection: type={first.DetectionType}, text={first.TextContent}, bbox=({first.BboxX:F3},{first.BboxY:F3},{first.BboxWidth:F3},{first.BboxHeight:F3}), page={first.PageNumber}");
+                    Console.WriteLine($"[Detection] Creating detections via API...");
                     var created = await _apiService.CreateDetectionsAsync(File.Id, allDetections);
+                    Console.WriteLine($"[Detection] API created {created.Count} detections");
                     foreach (var detection in created)
                     {
+                        Console.WriteLine($"[Detection] Created: {detection.Id}, bbox=({detection.BboxX:F3},{detection.BboxY:F3}), HasBbox: {detection.HasBoundingBox}");
+                        // Auto-approve detections in background (don't wait for response)
+                        _ = _apiService.UpdateDetectionAsync(
+                            detection.Id,
+                            new UpdateDetectionRequest { Status = "approved" }
+                        );
+                        // Use the created detection directly (it has bbox)
+                        detection.Status = "approved";
                         Detections.Add(detection);
                     }
+                    Console.WriteLine($"[Detection] Detections collection now has {Detections.Count} items");
                 }
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"[Detection] ERROR: {ex.Message}");
+                Console.WriteLine($"[Detection] Stack: {ex.StackTrace}");
                 SetError(ex);
             }
             finally
@@ -285,7 +332,7 @@ namespace Redact1.ViewModels
             }
         }
 
-        private async Task RejectDetectionAsync(Detection? detection)
+        public async Task RejectDetectionAsync(Detection? detection)
         {
             if (detection == null) return;
 
@@ -340,7 +387,7 @@ namespace Redact1.ViewModels
             }
         }
 
-        private async Task DeleteManualRedactionAsync(ManualRedaction? redaction)
+        public async Task DeleteManualRedactionAsync(ManualRedaction? redaction)
         {
             if (redaction == null) return;
 
@@ -386,8 +433,9 @@ namespace Redact1.ViewModels
 
                 if (File.IsImage)
                 {
-                    using var ms = new MemoryStream(redactedData);
-                    RedactedImage = new Bitmap(ms);
+                    _redactedImageStream?.Dispose();
+                    _redactedImageStream = new MemoryStream(redactedData);
+                    RedactedImage = new Bitmap(_redactedImageStream);
                 }
 
                 ShowRedacted = true;
@@ -450,6 +498,12 @@ namespace Redact1.ViewModels
         private void Close()
         {
             FileClosed?.Invoke(this, EventArgs.Empty);
+        }
+
+        public void Dispose()
+        {
+            _displayImageStream?.Dispose();
+            _redactedImageStream?.Dispose();
         }
     }
 }

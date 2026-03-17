@@ -1,3 +1,4 @@
+using PDFtoImage;
 using PdfSharp.Drawing;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
@@ -5,8 +6,10 @@ using Redact1.Models;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Drawing.Processing;
 using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
+using SkiaSharp;
 
 namespace Redact1.Services
 {
@@ -116,30 +119,16 @@ namespace Redact1.Services
         {
             return await Task.Run(() =>
             {
-                using var inputStream = new MemoryStream(pdfData);
-                var doc = PdfReader.Open(inputStream, PdfDocumentOpenMode.ReadOnly);
+                // PDFtoImage uses 0-based page index
+                var pageIndex = pageNumber - 1;
 
-                if (pageNumber < 1 || pageNumber > doc.PageCount)
-                {
-                    throw new ArgumentOutOfRangeException(nameof(pageNumber));
-                }
+                // Render PDF page to SKBitmap using stream
+                using var pdfStream = new MemoryStream(pdfData);
+                using var bitmap = Conversion.ToImage(pdfStream, page: pageIndex, options: new RenderOptions { Dpi = (int)(72 * scale) });
 
-                var page = doc.Pages[pageNumber - 1];
-                var width = (int)(page.Width.Point * scale);
-                var height = (int)(page.Height.Point * scale);
-
-                // Create a placeholder image (PDF rendering requires platform-specific libraries)
-                // In production, use PDFium or similar for actual PDF rendering
-                using var image = new Image<Rgba32>(width, height, Color.White);
-
-                image.Mutate(ctx =>
-                {
-                    // Draw placeholder text
-                    // In production, this would render actual PDF content
-                });
-
+                // Convert to PNG bytes
                 using var output = new MemoryStream();
-                image.SaveAsPng(output);
+                bitmap.Encode(output, SKEncodedImageFormat.Png, 100);
                 return output.ToArray();
             });
         }

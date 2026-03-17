@@ -431,7 +431,7 @@ public class ApiServiceTests
     public async Task GetFileAsync_ReturnsFile()
     {
         var file = new EvidenceFile { Id = "file-1", Filename = "test.pdf" };
-        SetupResponse(file);
+        SetupResponse(new FileUploadResponse { File = file });
 
         var result = await _apiService.GetFileAsync("file-1");
 
@@ -493,11 +493,15 @@ public class ApiServiceTests
     [Fact]
     public async Task CreateDetectionsAsync_ReturnsCreatedDetections()
     {
-        var detections = new List<Detection>
+        var response = new DetectionListResponse
         {
-            new Detection { Id = "det-1", DetectionType = "face" }
+            Detections = new List<Detection>
+            {
+                new Detection { Id = "det-1", DetectionType = "face" }
+            },
+            ManualRedactions = new List<ManualRedaction>()
         };
-        SetupResponse(detections);
+        SetupResponse(response);
 
         var result = await _apiService.CreateDetectionsAsync("file-1", new List<CreateDetectionRequest>
         {
@@ -505,6 +509,30 @@ public class ApiServiceTests
         });
 
         result.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task CreateDetectionsAsync_SendsWrappedFormat()
+    {
+        var response = new DetectionListResponse
+        {
+            Detections = new List<Detection>(),
+            ManualRedactions = new List<ManualRedaction>()
+        };
+        SetupResponse(response);
+
+        await _apiService.CreateDetectionsAsync("file-1", new List<CreateDetectionRequest>
+        {
+            new CreateDetectionRequest { DetectionType = "ssn", TextContent = "123-45-6789" }
+        });
+
+        _mockHandler.Protected().Verify(
+            "SendAsync",
+            Times.Once(),
+            ItExpr.Is<HttpRequestMessage>(r =>
+                r.Method == HttpMethod.Post &&
+                r.RequestUri!.ToString().Contains("/files/file-1/detections")),
+            ItExpr.IsAny<CancellationToken>());
     }
 
     [Fact]

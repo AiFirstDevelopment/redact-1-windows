@@ -82,23 +82,6 @@ public class FileReviewViewTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void GetStatusBrush_ReturnsCorrectBrushes()
-    {
-        var view = new FileReviewView();
-
-        var method = typeof(FileReviewView).GetMethod("GetStatusBrush",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-        var approvedBrush = method!.Invoke(view, new object[] { "approved" });
-        var rejectedBrush = method!.Invoke(view, new object[] { "rejected" });
-        var pendingBrush = method!.Invoke(view, new object[] { "pending" });
-
-        approvedBrush.Should().Be(Brushes.Green);
-        rejectedBrush.Should().Be(Brushes.Red);
-        pendingBrush.Should().Be(Brushes.Orange);
-    }
-
-    [AvaloniaFact]
     public void Canvas_PointerPressed_WhenNotDrawingMode_DoesNothing()
     {
         var view = new FileReviewView();
@@ -195,19 +178,6 @@ public class FileReviewViewTests : IDisposable
         var exception = Record.Exception(() => method!.Invoke(view, null));
 
         exception.Should().BeNull();
-    }
-
-    [AvaloniaFact]
-    public void GetStatusBrush_WithUnknownStatus_ReturnsOrange()
-    {
-        var view = new FileReviewView();
-
-        var method = typeof(FileReviewView).GetMethod("GetStatusBrush",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-        var unknownBrush = method!.Invoke(view, new object[] { "unknown" });
-
-        unknownBrush.Should().Be(Brushes.Orange);
     }
 
     [AvaloniaFact]

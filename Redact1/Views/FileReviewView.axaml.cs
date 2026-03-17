@@ -1,9 +1,11 @@
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Media;
 using Microsoft.Extensions.DependencyInjection;
+using Redact1.Models;
 using Redact1.ViewModels;
 
 namespace Redact1.Views
@@ -31,15 +33,41 @@ namespace Redact1.Views
 
             DataContext = _viewModel;
 
+            // Subscribe to collection changes to redraw overlays
+            _viewModel.Detections.CollectionChanged += (s, e) =>
+                Avalonia.Threading.Dispatcher.UIThread.Post(DrawOverlays);
+            _viewModel.ManualRedactions.CollectionChanged += (s, e) =>
+                Avalonia.Threading.Dispatcher.UIThread.Post(DrawOverlays);
+
+            // Redraw when page changes
+            _viewModel.PropertyChanged += (s, e) =>
+            {
+                if (e.PropertyName == "CurrentPage")
+                {
+                    Avalonia.Threading.Dispatcher.UIThread.Post(DrawOverlays);
+                }
+            };
+
             await _viewModel.LoadFileAsync(fileId);
 
+            // Redraw when image bounds change
             DisplayImage.PropertyChanged += (s, e) =>
             {
-                if (e.Property.Name == "Bounds")
+                if (e.Property.Name == "Bounds" && DisplayImage.Bounds.Width > 0)
                 {
+                    UpdateCanvasSize();
                     DrawOverlays();
                 }
             };
+        }
+
+        private void UpdateCanvasSize()
+        {
+            if (DisplayImage.Bounds.Width > 0 && DisplayImage.Bounds.Height > 0)
+            {
+                OverlayCanvas.Width = DisplayImage.Bounds.Width;
+                OverlayCanvas.Height = DisplayImage.Bounds.Height;
+            }
         }
 
         private void DrawOverlays()
@@ -51,57 +79,98 @@ namespace Redact1.Views
             var imageWidth = DisplayImage.Bounds.Width;
             var imageHeight = DisplayImage.Bounds.Height;
 
+            Console.WriteLine($"[DrawOverlays] Image size: {imageWidth}x{imageHeight}, Detections: {_viewModel.Detections.Count}, ManualRedactions: {_viewModel.ManualRedactions.Count}");
+
             if (imageWidth <= 0 || imageHeight <= 0) return;
 
-            // Draw detections
-            foreach (var detection in _viewModel.Detections)
+            var currentPage = _viewModel.CurrentPage;
+
+            // Draw detections for current page only
+            var pageDetections = _viewModel.Detections.Where(d =>
+                d.HasBoundingBox &&
+                (d.PageNumber == null || d.PageNumber == currentPage)).ToList();
+
+            Console.WriteLine($"[DrawOverlays] Page {currentPage} has {pageDetections.Count} detections to draw");
+
+            foreach (var detection in pageDetections)
             {
-                if (!detection.HasBoundingBox) continue;
+                var rectWidth = detection.BboxWidth!.Value * imageWidth;
+                var rectHeight = detection.BboxHeight!.Value * imageHeight;
+                // Y flip: PDF uses bottom-left origin, screen uses top-left
+                var rectX = detection.BboxX!.Value * imageWidth;
+                var rectY = (1 - detection.BboxY!.Value - detection.BboxHeight!.Value) * imageHeight;
 
                 var rect = new Rectangle
                 {
-                    Width = detection.BboxWidth!.Value * imageWidth,
-                    Height = detection.BboxHeight!.Value * imageHeight,
-                    Stroke = GetStatusBrush(detection.Status),
+                    Width = rectWidth,
+                    Height = rectHeight,
+                    Stroke = Brushes.Black,
                     StrokeThickness = 2,
-                    Fill = new SolidColorBrush(Color.FromArgb(40, 0, 0, 255))
+                    Fill = new SolidColorBrush(Color.FromArgb(80, 0, 0, 0)),
+                    Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
+                    Tag = detection
                 };
 
-                Canvas.SetLeft(rect, detection.BboxX!.Value * imageWidth);
-                Canvas.SetTop(rect, detection.BboxY!.Value * imageHeight);
+                rect.PointerPressed += OnRedactionRectClicked;
+
+                Canvas.SetLeft(rect, rectX);
+                Canvas.SetTop(rect, rectY);
 
                 OverlayCanvas.Children.Add(rect);
             }
 
-            // Draw manual redactions
-            foreach (var redaction in _viewModel.ManualRedactions)
+            // Draw manual redactions for current page only
+            var pageRedactions = _viewModel.ManualRedactions.Where(r =>
+                r.BboxX.HasValue &&
+                (r.PageNumber == null || r.PageNumber == currentPage));
+
+            foreach (var redaction in pageRedactions)
             {
-                if (!redaction.BboxX.HasValue) continue;
+                var rectWidth = redaction.BboxWidth!.Value * imageWidth;
+                var rectHeight = redaction.BboxHeight!.Value * imageHeight;
+                // Y flip: PDF uses bottom-left origin, screen uses top-left
+                var rectX = redaction.BboxX!.Value * imageWidth;
+                var rectY = (1 - redaction.BboxY!.Value - redaction.BboxHeight!.Value) * imageHeight;
 
                 var rect = new Rectangle
                 {
-                    Width = redaction.BboxWidth!.Value * imageWidth,
-                    Height = redaction.BboxHeight!.Value * imageHeight,
+                    Width = rectWidth,
+                    Height = rectHeight,
                     Stroke = Brushes.Black,
                     StrokeThickness = 2,
-                    Fill = new SolidColorBrush(Color.FromArgb(60, 0, 0, 0))
+                    Fill = new SolidColorBrush(Color.FromArgb(80, 0, 0, 0)),
+                    Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
+                    Tag = redaction
                 };
 
-                Canvas.SetLeft(rect, redaction.BboxX!.Value * imageWidth);
-                Canvas.SetTop(rect, redaction.BboxY!.Value * imageHeight);
+                rect.PointerPressed += OnRedactionRectClicked;
+
+                Canvas.SetLeft(rect, rectX);
+                Canvas.SetTop(rect, rectY);
 
                 OverlayCanvas.Children.Add(rect);
             }
         }
 
-        private IBrush GetStatusBrush(string status)
+        private async void OnRedactionRectClicked(object? sender, PointerPressedEventArgs e)
         {
-            return status switch
+            if (_viewModel == null || _viewModel.IsDrawingMode) return;
+
+            if (sender is Rectangle rect && rect.Tag != null)
             {
-                "approved" => Brushes.Green,
-                "rejected" => Brushes.Red,
-                _ => Brushes.Orange
-            };
+                e.Handled = true;
+
+                if (rect.Tag is Detection detection)
+                {
+                    await _viewModel.RejectDetectionAsync(detection);
+                }
+                else if (rect.Tag is ManualRedaction redaction)
+                {
+                    await _viewModel.DeleteManualRedactionAsync(redaction);
+                }
+
+                DrawOverlays();
+            }
         }
 
         private void Canvas_PointerPressed(object? sender, PointerPressedEventArgs e)

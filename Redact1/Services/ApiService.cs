@@ -43,7 +43,12 @@ namespace Redact1.Services
                 ? new StringContent(JsonSerializer.Serialize(data), Encoding.UTF8, "application/json")
                 : null;
             var response = await _httpClient.PostAsync($"/api{endpoint}", content);
-            response.EnsureSuccessStatusCode();
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorBody = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"[API] Error {response.StatusCode}: {errorBody}");
+                response.EnsureSuccessStatusCode();
+            }
             return await response.Content.ReadFromJsonAsync<T>()
                    ?? throw new Exception("Failed to deserialize response");
         }
@@ -198,7 +203,8 @@ namespace Redact1.Services
 
         public async Task<EvidenceFile> GetFileAsync(string id)
         {
-            return await GetAsync<EvidenceFile>($"/files/{id}");
+            var response = await GetAsync<FileUploadResponse>($"/files/{id}");
+            return response.File;
         }
 
         public async Task<byte[]> GetOriginalFileAsync(string fileId)
@@ -247,7 +253,8 @@ namespace Redact1.Services
 
         public async Task<List<Detection>> CreateDetectionsAsync(string fileId, List<CreateDetectionRequest> detections)
         {
-            return await PostAsync<List<Detection>>($"/files/{fileId}/detections", detections);
+            var response = await PostAsync<DetectionListResponse>($"/files/{fileId}/detections", new { detections });
+            return response.Detections;
         }
 
         public async Task ClearDetectionsAsync(string fileId)
