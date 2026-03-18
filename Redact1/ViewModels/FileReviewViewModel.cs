@@ -278,13 +278,7 @@ namespace Redact1.ViewModels
                     foreach (var detection in created)
                     {
                         Console.WriteLine($"[Detection] Created: {detection.Id}, bbox=({detection.BboxX:F3},{detection.BboxY:F3}), HasBbox: {detection.HasBoundingBox}");
-                        // Auto-approve detections in background (don't wait for response)
-                        _ = _apiService.UpdateDetectionAsync(
-                            detection.Id,
-                            new UpdateDetectionRequest { Status = "approved" }
-                        );
-                        // Use the created detection directly (it has bbox)
-                        detection.Status = "approved";
+                        // Detection starts as pending - user interaction will approve
                         Detections.Add(detection);
                     }
                     Console.WriteLine($"[Detection] Detections collection now has {Detections.Count} items");
@@ -302,7 +296,7 @@ namespace Redact1.ViewModels
             }
         }
 
-        private async Task ApproveDetectionAsync(Detection? detection)
+        public async Task ApproveDetectionAsync(Detection? detection)
         {
             if (detection == null) return;
 

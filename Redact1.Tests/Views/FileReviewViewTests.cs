@@ -652,6 +652,161 @@ public class FileReviewViewTests : IDisposable
         view.Should().NotBeNull();
     }
 
+    [AvaloniaFact]
+    public async Task ApproveIfPendingAsync_WithPendingDetection_ApprovesDetection()
+    {
+        var view = new FileReviewView();
+        view.LoadFile("file-123");
+
+        var detection = new Detection { Id = "det-1", Status = "pending" };
+        var rect = new Rectangle { Width = 100, Height = 50 };
+
+        var method = typeof(FileReviewView).GetMethod("ApproveIfPendingAsync",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        var task = method!.Invoke(view, new object?[] { detection, rect }) as Task;
+        var exception = await Record.ExceptionAsync(async () => await task!);
+
+        exception.Should().BeNull();
+    }
+
+    [AvaloniaFact]
+    public async Task ApproveIfPendingAsync_WithApprovedDetection_DoesNothing()
+    {
+        var view = new FileReviewView();
+        view.LoadFile("file-123");
+
+        var detection = new Detection { Id = "det-1", Status = "approved" };
+        var rect = new Rectangle { Width = 100, Height = 50 };
+
+        var method = typeof(FileReviewView).GetMethod("ApproveIfPendingAsync",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        var task = method!.Invoke(view, new object?[] { detection, rect }) as Task;
+        var exception = await Record.ExceptionAsync(async () => await task!);
+
+        exception.Should().BeNull();
+    }
+
+    [AvaloniaFact]
+    public async Task ApproveIfPendingAsync_WithManualRedaction_DoesNothing()
+    {
+        var view = new FileReviewView();
+        view.LoadFile("file-123");
+
+        var redaction = new ManualRedaction { Id = "red-1" };
+        var rect = new Rectangle { Width = 100, Height = 50 };
+
+        var method = typeof(FileReviewView).GetMethod("ApproveIfPendingAsync",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        var task = method!.Invoke(view, new object?[] { redaction, rect }) as Task;
+        var exception = await Record.ExceptionAsync(async () => await task!);
+
+        exception.Should().BeNull();
+    }
+
+    [AvaloniaFact]
+    public async Task ApproveIfPendingAsync_WithNullTag_DoesNothing()
+    {
+        var view = new FileReviewView();
+        view.LoadFile("file-123");
+
+        var rect = new Rectangle { Width = 100, Height = 50 };
+
+        var method = typeof(FileReviewView).GetMethod("ApproveIfPendingAsync",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        var task = method!.Invoke(view, new object?[] { null, rect }) as Task;
+        var exception = await Record.ExceptionAsync(async () => await task!);
+
+        exception.Should().BeNull();
+    }
+
+    [AvaloniaFact]
+    public void ClearSelection_WithPendingDetection_RestoresOrangeStroke()
+    {
+        var view = new FileReviewView();
+        view.LoadFile("file-123");
+
+        var detection = new Detection { Id = "det-1", Status = "pending" };
+        var rect = new Rectangle
+        {
+            Width = 100,
+            Height = 50,
+            Stroke = Brushes.Blue,
+            StrokeThickness = 3
+        };
+
+        SetPrivateField(view, "_selectedRect", rect);
+        SetPrivateField(view, "_selectedTag", detection);
+
+        var method = typeof(FileReviewView).GetMethod("ClearSelection",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        method!.Invoke(view, null);
+
+        rect.StrokeThickness.Should().Be(2);
+        // Pending detections should get orange stroke
+        rect.Stroke.Should().Be(Brushes.Orange);
+    }
+
+    [AvaloniaFact]
+    public void ClearSelection_WithApprovedDetection_RestoresBlackStroke()
+    {
+        var view = new FileReviewView();
+        view.LoadFile("file-123");
+
+        var detection = new Detection { Id = "det-1", Status = "approved" };
+        var rect = new Rectangle
+        {
+            Width = 100,
+            Height = 50,
+            Stroke = Brushes.Blue,
+            StrokeThickness = 3
+        };
+
+        SetPrivateField(view, "_selectedRect", rect);
+        SetPrivateField(view, "_selectedTag", detection);
+
+        var method = typeof(FileReviewView).GetMethod("ClearSelection",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        method!.Invoke(view, null);
+
+        rect.StrokeThickness.Should().Be(2);
+        // Approved detections should get black stroke
+        rect.Stroke.Should().Be(Brushes.Black);
+    }
+
+    [AvaloniaFact]
+    public void ClearSelection_WithManualRedaction_RestoresBlackStroke()
+    {
+        var view = new FileReviewView();
+        view.LoadFile("file-123");
+
+        var redaction = new ManualRedaction { Id = "red-1" };
+        var rect = new Rectangle
+        {
+            Width = 100,
+            Height = 50,
+            Stroke = Brushes.Blue,
+            StrokeThickness = 3
+        };
+
+        SetPrivateField(view, "_selectedRect", rect);
+        SetPrivateField(view, "_selectedTag", redaction);
+
+        var method = typeof(FileReviewView).GetMethod("ClearSelection",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        method!.Invoke(view, null);
+
+        rect.StrokeThickness.Should().Be(2);
+        // Manual redactions should get black stroke (they have no pending state)
+        rect.Stroke.Should().Be(Brushes.Black);
+    }
+
     // Helper method for setting private fields
     private static void SetPrivateField(object obj, string fieldName, object value)
     {

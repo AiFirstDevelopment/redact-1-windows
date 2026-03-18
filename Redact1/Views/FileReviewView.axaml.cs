@@ -117,13 +117,16 @@ namespace Redact1.Views
                 var rectX = detection.BboxX!.Value * imageWidth;
                 var rectY = (1 - detection.BboxY!.Value - detection.BboxHeight!.Value) * imageHeight;
 
+                var isPending = detection.Status == "pending";
+
                 var rect = new Rectangle
                 {
                     Width = rectWidth,
                     Height = rectHeight,
-                    Stroke = Brushes.Black,
+                    Stroke = isPending ? Brushes.Orange : Brushes.Black,
                     StrokeThickness = 2,
-                    Fill = new SolidColorBrush(Color.FromArgb(80, 0, 0, 0)),
+                    StrokeDashArray = isPending ? new Avalonia.Collections.AvaloniaList<double> { 4, 2 } : null,
+                    Fill = new SolidColorBrush(isPending ? Color.FromArgb(40, 255, 165, 0) : Color.FromArgb(80, 0, 0, 0)),
                     Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
                     Tag = detection
                 };
@@ -201,6 +204,9 @@ namespace Redact1.Views
                 _originalRectPosition = new Point(Canvas.GetLeft(rect), Canvas.GetTop(rect));
                 _originalRectSize = new Size(rect.Width, rect.Height);
 
+                // Approve pending detection on click
+                _ = ApproveIfPendingAsync(rect.Tag, rect);
+
                 // Start long press timer
                 _longPressTimer?.Stop();
                 _longPressTimer = new System.Timers.Timer(LongPressDelayMs);
@@ -228,12 +234,31 @@ namespace Redact1.Views
             DrawResizeHandles(rect);
         }
 
+        private async Task ApproveIfPendingAsync(object? tag, Rectangle? rect)
+        {
+            if (_viewModel == null || tag is not Detection detection || detection.Status != "pending")
+                return;
+
+            // Update in API
+            await _viewModel.ApproveDetectionAsync(detection);
+
+            // Update visual appearance immediately
+            if (rect != null)
+            {
+                rect.Stroke = Brushes.Blue; // Keep blue while selected
+                rect.StrokeDashArray = null;
+                rect.Fill = new SolidColorBrush(Color.FromArgb(80, 0, 0, 0));
+            }
+        }
+
         private void ClearSelection()
         {
             if (_selectedRect != null)
             {
+                // Restore appearance based on status
+                var isPending = _selectedTag is Detection d && d.Status == "pending";
                 _selectedRect.StrokeThickness = 2;
-                _selectedRect.Stroke = Brushes.Black;
+                _selectedRect.Stroke = isPending ? Brushes.Orange : Brushes.Black;
             }
 
             // Remove resize handles
@@ -313,6 +338,9 @@ namespace Redact1.Views
                 _dragStartPoint = e.GetPosition(OverlayCanvas);
                 _originalRectPosition = new Point(Canvas.GetLeft(_selectedRect), Canvas.GetTop(_selectedRect));
                 _originalRectSize = new Size(_selectedRect.Width, _selectedRect.Height);
+
+                // Approve pending detection on resize start
+                _ = ApproveIfPendingAsync(_selectedTag, _selectedRect);
 
                 e.Pointer.Capture(OverlayCanvas);
             }
