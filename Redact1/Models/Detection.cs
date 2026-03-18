@@ -142,6 +142,9 @@ namespace Redact1.Models
 
         [JsonPropertyName("confidence")]
         public double? Confidence { get; set; }
+
+        [JsonPropertyName("status")]
+        public string? Status { get; set; }
     }
 
     public class UpdateDetectionRequest

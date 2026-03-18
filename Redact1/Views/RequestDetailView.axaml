@@ -152,7 +152,7 @@
                                             Content="X"
                                             Classes="icon"
                                             Foreground="{StaticResource ErrorBrush}"
-                                            Command="{Binding $parent[UserControl].DataContext.DeleteFileCommand}"
+                                            Command="{Binding $parent[UserControl].DataContext.RequestDeleteFileCommand}"
                                             CommandParameter="{Binding}" />
                                 </Grid>
                             </Border>
@@ -215,7 +215,54 @@
             <ProgressBar IsIndeterminate="True" Width="200" Height="4" VerticalAlignment="Center" />
         </Border>
 
-        <!-- Delete Confirmation Modal -->
+        <!-- Delete File Confirmation Modal -->
+        <Border Grid.RowSpan="2"
+                Background="#80000000"
+                IsVisible="{Binding IsConfirmingFileDelete}">
+            <Border Classes="card"
+                    Width="400"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Center">
+                <StackPanel>
+                    <TextBlock Text="Confirm Delete File"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource ErrorBrush}"
+                               Margin="0,0,0,16" />
+
+                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,24">
+                        <Run Text="Are you sure you want to delete " />
+                        <Run Text="{Binding FileToDelete.Filename}" FontWeight="SemiBold" />
+                        <Run Text="? This action cannot be undone." />
+                    </TextBlock>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <Button Grid.Column="0"
+                                Content="Cancel"
+                                Classes="secondary"
+                                Command="{Binding CancelDeleteFileCommand}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center"
+                                Margin="0,0,8,0" />
+
+                        <Button Grid.Column="1"
+                                Content="Delete"
+                                Classes="danger"
+                                Command="{Binding ConfirmDeleteFileCommand}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center"
+                                Margin="8,0,0,0" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </Border>
+
+        <!-- Delete Request Confirmation Modal -->
         <Border Grid.RowSpan="2"
                 Background="#80000000"
                 IsVisible="{Binding IsConfirmingDelete}">

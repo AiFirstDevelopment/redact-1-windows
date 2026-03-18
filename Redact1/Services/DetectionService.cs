@@ -494,12 +494,18 @@ namespace Redact1.Services
                     }
 
                     var output = await process.StandardOutput.ReadToEndAsync();
+                    var stderr = await process.StandardError.ReadToEndAsync();
                     await process.WaitForExitAsync();
+
+                    // Log stderr for debugging
+                    if (!string.IsNullOrEmpty(stderr))
+                    {
+                        Console.WriteLine($"[Detection] Python stderr: {stderr}");
+                    }
 
                     if (process.ExitCode != 0)
                     {
-                        var error = await process.StandardError.ReadToEndAsync();
-                        Console.WriteLine($"[Detection] Python error: {error}");
+                        Console.WriteLine($"[Detection] Python error (exit code {process.ExitCode}): {stderr}");
                         return detections;
                     }
 

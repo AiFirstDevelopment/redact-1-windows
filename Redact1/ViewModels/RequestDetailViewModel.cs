@@ -19,6 +19,8 @@ namespace Redact1.ViewModels
         private string _status = "new";
         private bool _isUploading;
         private bool _isConfirmingDelete;
+        private bool _isConfirmingFileDelete;
+        private EvidenceFile? _fileToDelete;
 
         public RecordsRequest? Request
         {
@@ -74,12 +76,27 @@ namespace Redact1.ViewModels
             set => SetProperty(ref _isConfirmingDelete, value);
         }
 
+        public bool IsConfirmingFileDelete
+        {
+            get => _isConfirmingFileDelete;
+            set => SetProperty(ref _isConfirmingFileDelete, value);
+        }
+
+        public EvidenceFile? FileToDelete
+        {
+            get => _fileToDelete;
+            set => SetProperty(ref _fileToDelete, value);
+        }
+
         public ICommand LoadFilesCommand { get; }
         public ICommand LoadExportsCommand { get; }
         public ICommand SaveChangesCommand { get; }
         public ICommand UploadFileCommand { get; }
         public ICommand OpenFileCommand { get; }
         public ICommand DeleteFileCommand { get; }
+        public ICommand RequestDeleteFileCommand { get; }
+        public ICommand ConfirmDeleteFileCommand { get; }
+        public ICommand CancelDeleteFileCommand { get; }
         public ICommand CreateExportCommand { get; }
         public ICommand DownloadExportCommand { get; }
         public ICommand CloseCommand { get; }
@@ -103,6 +120,9 @@ namespace Redact1.ViewModels
             UploadFileCommand = new AsyncRelayCommand(UploadFileAsync);
             OpenFileCommand = new RelayCommand<EvidenceFile>(OpenFile);
             DeleteFileCommand = new AsyncRelayCommand<EvidenceFile>(DeleteFileAsync);
+            RequestDeleteFileCommand = new RelayCommand<EvidenceFile>(RequestDeleteFile);
+            ConfirmDeleteFileCommand = new AsyncRelayCommand(ConfirmDeleteFileAsync);
+            CancelDeleteFileCommand = new RelayCommand(CancelDeleteFile);
             CreateExportCommand = new AsyncRelayCommand(CreateExportAsync);
             DownloadExportCommand = new AsyncRelayCommand<Export>(DownloadExportAsync);
             CloseCommand = new RelayCommand(Close);
@@ -223,6 +243,39 @@ namespace Redact1.ViewModels
             {
                 SetError(ex);
             }
+        }
+
+        private void RequestDeleteFile(EvidenceFile? file)
+        {
+            if (file == null) return;
+            FileToDelete = file;
+            IsConfirmingFileDelete = true;
+        }
+
+        private async Task ConfirmDeleteFileAsync()
+        {
+            if (FileToDelete == null) return;
+
+            try
+            {
+                await _apiService.DeleteFileAsync(FileToDelete.Id);
+                Files.Remove(FileToDelete);
+            }
+            catch (Exception ex)
+            {
+                SetError(ex);
+            }
+            finally
+            {
+                IsConfirmingFileDelete = false;
+                FileToDelete = null;
+            }
+        }
+
+        private void CancelDeleteFile()
+        {
+            IsConfirmingFileDelete = false;
+            FileToDelete = null;
         }
 
         private async Task CreateExportAsync()

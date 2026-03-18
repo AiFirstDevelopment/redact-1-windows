@@ -275,7 +275,12 @@ namespace Redact1.Services
         // Detections
         public async Task<DetectionListResponse> GetDetectionsAsync(string fileId)
         {
-            return await GetAsync<DetectionListResponse>($"/files/{fileId}/detections");
+            var response = await _httpClient.GetAsync($"/api/files/{fileId}/detections");
+            response.EnsureSuccessStatusCode();
+            var json = await response.Content.ReadAsStringAsync();
+            Console.WriteLine($"[API] Detections raw JSON: {json}");
+            return System.Text.Json.JsonSerializer.Deserialize<DetectionListResponse>(json)
+                   ?? throw new Exception("Failed to deserialize response");
         }
 
         public async Task<List<Detection>> CreateDetectionsAsync(string fileId, List<CreateDetectionRequest> detections)

@@ -6,6 +6,8 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Media;
 using Microsoft.Extensions.DependencyInjection;
+using MsBox.Avalonia;
+using MsBox.Avalonia.Enums;
 using Redact1.Models;
 using Redact1.ViewModels;
 
@@ -41,6 +43,29 @@ namespace Redact1.Views
             InitializeComponent();
 
             CloseButton.Click += (s, e) => _viewModel?.CloseCommand.Execute(null);
+            CancelButton.Click += OnCancelClick;
+        }
+
+        private async void OnCancelClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            // If no changes, just close without confirmation
+            if (_viewModel == null || !_viewModel.HasChanges)
+            {
+                _viewModel?.CancelCommand.Execute(null);
+                return;
+            }
+
+            var box = MessageBoxManager.GetMessageBoxStandard(
+                "Discard Changes?",
+                "Are you sure you want to cancel? All changes will be lost.",
+                ButtonEnum.YesNo,
+                Icon.Question);
+
+            var result = await box.ShowAsync();
+            if (result == ButtonResult.Yes)
+            {
+                _viewModel?.CancelCommand.Execute(null);
+            }
         }
 
         public async void LoadFile(string fileId)
@@ -594,6 +619,40 @@ namespace Redact1.Views
             if ((_isDragging || _isResizing) && _hasMoved && _selectedRect != null)
             {
                 await CommitRectChanges();
+
+                // Set approved appearance after drag/resize
+                _selectedRect.StrokeThickness = 2;
+                _selectedRect.Stroke = Brushes.Black;
+                _selectedRect.StrokeDashArray = null;
+                _selectedRect.Fill = new SolidColorBrush(Color.FromArgb(80, 0, 0, 0));
+
+                // Remove resize handles and clear selection
+                foreach (var handle in _resizeHandles)
+                {
+                    OverlayCanvas.Children.Remove(handle);
+                }
+                _resizeHandles.Clear();
+                _selectedRect = null;
+                _selectedTag = null;
+            }
+
+            // If it was just a click (no movement), show approved state immediately
+            else if (_isDragging && !_hasMoved && _selectedRect != null)
+            {
+                // Set approved appearance directly (don't wait for async)
+                _selectedRect.StrokeThickness = 2;
+                _selectedRect.Stroke = Brushes.Black;
+                _selectedRect.StrokeDashArray = null;
+                _selectedRect.Fill = new SolidColorBrush(Color.FromArgb(80, 0, 0, 0));
+
+                // Remove resize handles
+                foreach (var handle in _resizeHandles)
+                {
+                    OverlayCanvas.Children.Remove(handle);
+                }
+                _resizeHandles.Clear();
+                _selectedRect = null;
+                _selectedTag = null;
             }
 
             _isDragging = false;

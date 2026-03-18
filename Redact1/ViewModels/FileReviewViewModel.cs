@@ -29,6 +29,8 @@ namespace Redact1.ViewModels
         private bool _isDetecting;
         private bool _showRedacted;
         private bool _isDrawingMode;
+        private bool _showDetectionPrompt = true;
+        private bool _hasUnsavedChanges;
 
         public EvidenceFile? File
         {
@@ -96,6 +98,14 @@ namespace Redact1.ViewModels
             set => SetProperty(ref _isDrawingMode, value);
         }
 
+        public bool ShowDetectionPrompt
+        {
+            get => _showDetectionPrompt;
+            set => SetProperty(ref _showDetectionPrompt, value);
+        }
+
+        public bool HasChanges => _hasUnsavedChanges;
+
         public ICommand LoadDetectionsCommand { get; }
         public ICommand RunDetectionCommand { get; }
         public ICommand ApproveDetectionCommand { get; }
@@ -104,6 +114,8 @@ namespace Redact1.ViewModels
         public ICommand DeleteManualRedactionCommand { get; }
         public ICommand PreviewRedactedCommand { get; }
         public ICommand SaveRedactedCommand { get; }
+        public ICommand SaveCommand { get; }
+        public ICommand CancelCommand { get; }
         public ICommand NextPageCommand { get; }
         public ICommand PreviousPageCommand { get; }
         public ICommand ToggleDrawingModeCommand { get; }
@@ -125,6 +137,8 @@ namespace Redact1.ViewModels
             DeleteManualRedactionCommand = new AsyncRelayCommand<ManualRedaction>(DeleteManualRedactionAsync);
             PreviewRedactedCommand = new AsyncRelayCommand(PreviewRedactedAsync);
             SaveRedactedCommand = new AsyncRelayCommand(SaveRedactedAsync);
+            SaveCommand = new AsyncRelayCommand(SaveAsync);
+            CancelCommand = new RelayCommand(Cancel);
             NextPageCommand = new AsyncRelayCommand(NextPageAsync);
             PreviousPageCommand = new AsyncRelayCommand(PreviousPageAsync);
             ToggleDrawingModeCommand = new RelayCommand(ToggleDrawingMode);
@@ -156,8 +170,20 @@ namespace Redact1.ViewModels
                     await LoadImage();
                 }
 
+                // Check for existing saved detections
                 await LoadDetectionsAsync();
-                Console.WriteLine($"[FileReview] Load complete, {Detections.Count} detections");
+
+                // If there are saved detections, skip the prompt
+                if (Detections.Count > 0 || ManualRedactions.Count > 0)
+                {
+                    ShowDetectionPrompt = false;
+                    Console.WriteLine($"[FileReview] Load complete, {Detections.Count} detections loaded");
+                }
+                else
+                {
+                    ShowDetectionPrompt = true;
+                    Console.WriteLine($"[FileReview] Load complete, showing detection prompt");
+                }
             }
             catch (Exception ex)
             {
@@ -235,12 +261,13 @@ namespace Redact1.ViewModels
         {
             if (File == null || _originalFileData == null) return;
 
+            ShowDetectionPrompt = false;
+            _hasUnsavedChanges = true;
             IsDetecting = true;
             ClearError();
 
             try
             {
-                await _apiService.ClearDetectionsAsync(File.Id);
                 Detections.Clear();
 
                 List<CreateDetectionRequest> allDetections = new();
@@ -267,22 +294,27 @@ namespace Redact1.ViewModels
                 }
 
                 Console.WriteLine($"[Detection] Total detections: {allDetections.Count}");
-                if (allDetections.Count > 0)
+                // Store detections locally only - will be saved on Save click
+                foreach (var req in allDetections)
                 {
-                    // Log first detection for debugging
-                    var first = allDetections[0];
-                    Console.WriteLine($"[Detection] First detection: type={first.DetectionType}, text={first.TextContent}, bbox=({first.BboxX:F3},{first.BboxY:F3},{first.BboxWidth:F3},{first.BboxHeight:F3}), page={first.PageNumber}");
-                    Console.WriteLine($"[Detection] Creating detections via API...");
-                    var created = await _apiService.CreateDetectionsAsync(File.Id, allDetections);
-                    Console.WriteLine($"[Detection] API created {created.Count} detections");
-                    foreach (var detection in created)
+                    var detection = new Detection
                     {
-                        Console.WriteLine($"[Detection] Created: {detection.Id}, bbox=({detection.BboxX:F3},{detection.BboxY:F3}), HasBbox: {detection.HasBoundingBox}");
-                        // Detection starts as pending - user interaction will approve
-                        Detections.Add(detection);
-                    }
-                    Console.WriteLine($"[Detection] Detections collection now has {Detections.Count} items");
+                        Id = "", // Empty ID indicates not saved to server yet
+                        FileId = File.Id,
+                        DetectionType = req.DetectionType,
+                        TextContent = req.TextContent,
+                        Confidence = req.Confidence,
+                        BboxX = req.BboxX,
+                        BboxY = req.BboxY,
+                        BboxWidth = req.BboxWidth,
+                        BboxHeight = req.BboxHeight,
+                        PageNumber = req.PageNumber,
+                        Status = "pending"
+                    };
+                    Console.WriteLine($"[Detection] Added local: bbox=({detection.BboxX:F3},{detection.BboxY:F3}), HasBbox: {detection.HasBoundingBox}");
+                    Detections.Add(detection);
                 }
+                Console.WriteLine($"[Detection] Detections collection now has {Detections.Count} items");
             }
             catch (Exception ex)
             {
@@ -296,139 +328,72 @@ namespace Redact1.ViewModels
             }
         }
 
-        public async Task ApproveDetectionAsync(Detection? detection)
+        public Task ApproveDetectionAsync(Detection? detection)
         {
-            if (detection == null) return;
-
-            try
-            {
-                var updated = await _apiService.UpdateDetectionAsync(
-                    detection.Id,
-                    new UpdateDetectionRequest { Status = "approved" }
-                );
-
-                var index = Detections.IndexOf(detection);
-                if (index >= 0)
-                {
-                    Detections[index] = updated;
-                }
-            }
-            catch (Exception ex)
-            {
-                SetError(ex);
-            }
+            if (detection == null) return Task.CompletedTask;
+            // Update status locally only - will be saved on Save click
+            detection.Status = "approved";
+            _hasUnsavedChanges = true;
+            return Task.CompletedTask;
         }
 
-        public async Task RejectDetectionAsync(Detection? detection)
+        public Task RejectDetectionAsync(Detection? detection)
         {
-            if (detection == null) return;
-
-            try
-            {
-                var updated = await _apiService.UpdateDetectionAsync(
-                    detection.Id,
-                    new UpdateDetectionRequest { Status = "rejected" }
-                );
-
-                var index = Detections.IndexOf(detection);
-                if (index >= 0)
-                {
-                    Detections[index] = updated;
-                }
-            }
-            catch (Exception ex)
-            {
-                SetError(ex);
-            }
+            if (detection == null) return Task.CompletedTask;
+            // Remove from local collection - will not be saved
+            Detections.Remove(detection);
+            _hasUnsavedChanges = true;
+            return Task.CompletedTask;
         }
 
-        private async Task ApproveAllAsync()
+        private Task ApproveAllAsync()
         {
             foreach (var detection in Detections.Where(d => d.Status == "pending").ToList())
             {
-                await ApproveDetectionAsync(detection);
+                detection.Status = "approved";
             }
+            _hasUnsavedChanges = true;
+            return Task.CompletedTask;
         }
 
-        public async Task AddManualRedaction(double x, double y, double width, double height)
+        public Task AddManualRedaction(double x, double y, double width, double height)
         {
-            if (File == null) return;
+            if (File == null) return Task.CompletedTask;
 
-            try
+            // Add locally only - will be saved on Save click
+            var redaction = new ManualRedaction
             {
-                var request = new CreateManualRedactionRequest
-                {
-                    BboxX = x,
-                    BboxY = y,
-                    BboxWidth = width,
-                    BboxHeight = height,
-                    PageNumber = File.IsPdf ? CurrentPage : null
-                };
-
-                var redaction = await _apiService.CreateManualRedactionAsync(File.Id, request);
-                ManualRedactions.Add(redaction);
-            }
-            catch (Exception ex)
-            {
-                SetError(ex);
-            }
+                Id = "", // Empty ID indicates not saved to server yet
+                FileId = File.Id,
+                BboxX = x,
+                BboxY = y,
+                BboxWidth = width,
+                BboxHeight = height,
+                PageNumber = File.IsPdf ? CurrentPage : null
+            };
+            ManualRedactions.Add(redaction);
+            _hasUnsavedChanges = true;
+            return Task.CompletedTask;
         }
 
-        public async Task DeleteManualRedactionAsync(ManualRedaction? redaction)
+        public Task DeleteManualRedactionAsync(ManualRedaction? redaction)
         {
-            if (redaction == null) return;
-
-            try
-            {
-                await _apiService.DeleteManualRedactionAsync(redaction.Id);
-                ManualRedactions.Remove(redaction);
-            }
-            catch (Exception ex)
-            {
-                SetError(ex);
-            }
+            if (redaction == null) return Task.CompletedTask;
+            // Remove locally only
+            ManualRedactions.Remove(redaction);
+            return Task.CompletedTask;
         }
 
-        public async Task UpdateDetectionAsync(Detection detection)
+        public Task UpdateDetectionAsync(Detection detection)
         {
-            try
-            {
-                await _apiService.UpdateDetectionAsync(
-                    detection.Id,
-                    new UpdateDetectionRequest
-                    {
-                        BboxX = detection.BboxX,
-                        BboxY = detection.BboxY,
-                        BboxWidth = detection.BboxWidth,
-                        BboxHeight = detection.BboxHeight
-                    }
-                );
-            }
-            catch (Exception ex)
-            {
-                SetError(ex);
-            }
+            // Already updated in local object - nothing to do
+            return Task.CompletedTask;
         }
 
-        public async Task UpdateManualRedactionAsync(ManualRedaction redaction)
+        public Task UpdateManualRedactionAsync(ManualRedaction redaction)
         {
-            try
-            {
-                await _apiService.UpdateManualRedactionAsync(
-                    redaction.Id,
-                    new UpdateManualRedactionRequest
-                    {
-                        BboxX = redaction.BboxX,
-                        BboxY = redaction.BboxY,
-                        BboxWidth = redaction.BboxWidth,
-                        BboxHeight = redaction.BboxHeight
-                    }
-                );
-            }
-            catch (Exception ex)
-            {
-                SetError(ex);
-            }
+            // Already updated in local object - nothing to do
+            return Task.CompletedTask;
         }
 
         private async Task PreviewRedactedAsync()
@@ -517,6 +482,139 @@ namespace Redact1.ViewModels
             {
                 await LoadPdfPage(CurrentPage - 1);
             }
+        }
+
+        private async Task SaveAsync()
+        {
+            Console.WriteLine("[Save] SaveAsync called");
+            if (File == null || _originalFileData == null)
+            {
+                Console.WriteLine("[Save] File or data is null, returning");
+                return;
+            }
+
+            IsLoading = true;
+
+            try
+            {
+                Console.WriteLine($"[Save] Total detections: {Detections.Count}");
+                foreach (var d in Detections)
+                {
+                    Console.WriteLine($"[Save] Detection: status={d.Status}, bbox=({d.BboxX},{d.BboxY},{d.BboxWidth},{d.BboxHeight}), HasBbox={d.HasBoundingBox}");
+                }
+
+                Console.WriteLine("[Save] Clearing detections on server...");
+                // Clear existing detections on server
+                await _apiService.ClearDetectionsAsync(File.Id);
+
+                // Save approved detections to API
+                var approvedDetections = Detections
+                    .Where(d => d.Status == "approved")
+                    .Select(d => new CreateDetectionRequest
+                    {
+                        DetectionType = d.DetectionType,
+                        BboxX = d.BboxX,
+                        BboxY = d.BboxY,
+                        BboxWidth = d.BboxWidth,
+                        BboxHeight = d.BboxHeight,
+                        PageNumber = d.PageNumber,
+                        Status = "approved"
+                    })
+                    .ToList();
+
+                Console.WriteLine($"[Save] Approved detections to save: {approvedDetections.Count}");
+                if (approvedDetections.Count > 0)
+                {
+                    Console.WriteLine($"[Save] Creating detections via API...");
+                    foreach (var req in approvedDetections)
+                    {
+                        Console.WriteLine($"[Save] Sending: bbox=({req.BboxX},{req.BboxY},{req.BboxWidth},{req.BboxHeight})");
+                    }
+                    var created = await _apiService.CreateDetectionsAsync(File.Id, approvedDetections);
+                    Console.WriteLine($"[Save] Detections created ({created.Count}), updating status...");
+                    foreach (var det in created)
+                    {
+                        Console.WriteLine($"[Save] Received: id={det.Id}, bbox=({det.BboxX},{det.BboxY},{det.BboxWidth},{det.BboxHeight})");
+                    }
+
+                    // API ignores status on create, so update each one
+                    foreach (var det in created)
+                    {
+                        await _apiService.UpdateDetectionAsync(det.Id, new UpdateDetectionRequest { Status = "approved" });
+                    }
+                    Console.WriteLine($"[Save] Status updated");
+                }
+
+                // Save manual redactions to API
+                foreach (var redaction in ManualRedactions)
+                {
+                    if (string.IsNullOrEmpty(redaction.Id))
+                    {
+                        await _apiService.CreateManualRedactionAsync(File.Id, new CreateManualRedactionRequest
+                        {
+                            BboxX = redaction.BboxX ?? 0,
+                            BboxY = redaction.BboxY ?? 0,
+                            BboxWidth = redaction.BboxWidth ?? 0,
+                            BboxHeight = redaction.BboxHeight ?? 0,
+                            PageNumber = redaction.PageNumber
+                        });
+                    }
+                }
+
+                // Generate and save redacted file
+                byte[] redactedData;
+                if (File.IsImage)
+                {
+                    redactedData = await _redactionService.RedactImageAsync(
+                        _originalFileData,
+                        Detections.Where(d => d.Status == "approved").ToList(),
+                        ManualRedactions.ToList()
+                    );
+                }
+                else
+                {
+                    redactedData = await _redactionService.RedactPdfAsync(
+                        _originalFileData,
+                        Detections.Where(d => d.Status == "approved").ToList(),
+                        ManualRedactions.ToList()
+                    );
+                }
+
+                var filename = File.IsPdf
+                    ? Path.ChangeExtension(File.Filename, ".redacted.pdf")
+                    : Path.ChangeExtension(File.Filename, ".redacted.jpg");
+
+                Console.WriteLine($"[Save] Uploading redacted file: {filename}");
+                try
+                {
+                    await _apiService.UploadRedactedFileAsync(File.Id, redactedData, filename);
+                    Console.WriteLine("[Save] Redacted file uploaded");
+                }
+                catch (Exception uploadEx)
+                {
+                    // Log but don't fail - detections are saved
+                    Console.WriteLine($"[Save] Redacted upload failed (non-fatal): {uploadEx.Message}");
+                }
+
+                Console.WriteLine("[Save] Complete, closing...");
+                FileClosed?.Invoke(this, EventArgs.Empty);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Save] ERROR: {ex.Message}");
+                Console.WriteLine($"[Save] Stack: {ex.StackTrace}");
+                SetError(ex);
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        }
+
+        private void Cancel()
+        {
+            // Discard all local changes and close
+            FileClosed?.Invoke(this, EventArgs.Empty);
         }
 
         private void ToggleDrawingMode()

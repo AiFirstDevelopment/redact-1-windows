@@ -1,61 +1,59 @@
 #!/usr/bin/env python3
-"""Face detection script using OpenCV Haar cascade."""
+"""Face detection script using Amazon Rekognition."""
 import sys
-import cv2
 import json
+import os
 
 def detect_faces(image_path, cascade_path):
-    """Detect faces in an image and return bounding boxes as JSON."""
-    # Load image
-    img = cv2.imread(image_path)
-    if img is None:
-        return json.dumps({"error": "Failed to load image", "faces": []})
+    """Detect faces in an image using Amazon Rekognition."""
+    try:
+        import boto3
+        from botocore.exceptions import NoCredentialsError, ClientError
+    except ImportError:
+        return json.dumps({"error": "boto3 not installed", "faces": []})
 
-    height, width = img.shape[:2]
+    # Read image file
+    try:
+        with open(image_path, 'rb') as f:
+            image_bytes = f.read()
+    except Exception as e:
+        return json.dumps({"error": f"Failed to read image: {str(e)}", "faces": []})
 
-    # Load cascade
-    face_cascade = cv2.CascadeClassifier(cascade_path)
-    if face_cascade.empty():
-        return json.dumps({"error": "Failed to load cascade", "faces": []})
+    # Get image dimensions using PIL or cv2
+    try:
+        import cv2
+        import numpy as np
+        nparr = np.frombuffer(image_bytes, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is None:
+            return json.dumps({"error": "Failed to decode image", "faces": []})
+        height, width = img.shape[:2]
+    except Exception as e:
+        return json.dumps({"error": f"Failed to get image dimensions: {str(e)}", "faces": []})
 
-    # Convert to grayscale
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    gray = cv2.equalizeHist(gray)
-
-    # Detect faces - use original sensitivity but filter false positives
-    faces = face_cascade.detectMultiScale(
-        gray,
-        scaleFactor=1.1,
-        minNeighbors=5,
-        minSize=(40, 40)
-    )
-
-    # Filter out false positives: remove detections that are directly below another
-    # (e.g., chest/throat area detected below a face)
-    filtered_faces = []
-    for (x, y, w, h) in faces:
-        is_below_another = False
-        for (x2, y2, w2, h2) in faces:
-            if (x, y, w, h) == (x2, y2, w2, h2):
-                continue
-            # Check if this detection is directly below another (overlapping x-range)
-            x_overlap = (x < x2 + w2) and (x + w > x2)
-            is_below = y > y2 + h2 * 0.5  # This face starts below the middle of the other
-            close_vertically = y < y2 + h2 * 1.5  # And is close enough to be a false positive
-            if x_overlap and is_below and close_vertically:
-                is_below_another = True
-                break
-        if not is_below_another:
-            filtered_faces.append((x, y, w, h))
+    # Call Amazon Rekognition
+    try:
+        client = boto3.client('rekognition')
+        response = client.detect_faces(
+            Image={'Bytes': image_bytes},
+            Attributes=['DEFAULT']
+        )
+    except NoCredentialsError:
+        return json.dumps({"error": "AWS credentials not configured. Run: aws configure", "faces": []})
+    except ClientError as e:
+        return json.dumps({"error": f"AWS error: {str(e)}", "faces": []})
+    except Exception as e:
+        return json.dumps({"error": f"Rekognition error: {str(e)}", "faces": []})
 
     # Convert to normalized coordinates
     result = []
-    for (x, y, w, h) in filtered_faces:
+    for face in response.get('FaceDetails', []):
+        bbox = face['BoundingBox']
         result.append({
-            "x": x / width,
-            "y": y / height,
-            "width": w / width,
-            "height": h / height
+            "x": bbox['Left'],
+            "y": bbox['Top'],
+            "width": bbox['Width'],
+            "height": bbox['Height']
         })
 
     return json.dumps({"faces": result, "count": len(result)})
