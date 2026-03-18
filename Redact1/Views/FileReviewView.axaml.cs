@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Timers;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
@@ -16,6 +17,22 @@ namespace Redact1.Views
         private bool _isDrawing;
         private Point _startPoint;
         private Rectangle? _currentRect;
+
+        // Selection and manipulation state
+        private Rectangle? _selectedRect;
+        private object? _selectedTag; // Detection or ManualRedaction
+        private bool _isDragging;
+        private bool _isResizing;
+        private Point _dragStartPoint;
+        private Point _originalRectPosition;
+        private Size _originalRectSize;
+        private string? _resizeHandle; // "nw", "n", "ne", "e", "se", "s", "sw", "w"
+        private List<Rectangle> _resizeHandles = new();
+
+        // Long press detection
+        private System.Timers.Timer? _longPressTimer;
+        private bool _hasMoved;
+        private const int LongPressDelayMs = 500;
 
         public event EventHandler? FileClosed;
 
@@ -152,24 +169,302 @@ namespace Redact1.Views
             }
         }
 
-        private async void OnRedactionRectClicked(object? sender, PointerPressedEventArgs e)
+        private void OnRedactionRectClicked(object? sender, PointerPressedEventArgs e)
         {
             if (_viewModel == null || _viewModel.IsDrawingMode) return;
 
             if (sender is Rectangle rect && rect.Tag != null)
             {
                 e.Handled = true;
+                var props = e.GetCurrentPoint(OverlayCanvas).Properties;
 
-                if (rect.Tag is Detection detection)
+                // Right-click: show delete option
+                if (props.IsRightButtonPressed)
                 {
-                    await _viewModel.RejectDetectionAsync(detection);
-                }
-                else if (rect.Tag is ManualRedaction redaction)
-                {
-                    await _viewModel.DeleteManualRedactionAsync(redaction);
+                    SelectRect(rect);
+                    ShowDeleteContextMenu(rect, e.GetPosition(this));
+                    return;
                 }
 
-                DrawOverlays();
+                // Double-click: delete
+                if (e.ClickCount == 2)
+                {
+                    _ = DeleteSelectedAsync(rect.Tag);
+                    return;
+                }
+
+                // Single click: select and prepare for drag
+                SelectRect(rect);
+                _isDragging = true;
+                _hasMoved = false;
+                _dragStartPoint = e.GetPosition(OverlayCanvas);
+                _originalRectPosition = new Point(Canvas.GetLeft(rect), Canvas.GetTop(rect));
+                _originalRectSize = new Size(rect.Width, rect.Height);
+
+                // Start long press timer
+                _longPressTimer?.Stop();
+                _longPressTimer = new System.Timers.Timer(LongPressDelayMs);
+                _longPressTimer.Elapsed += OnLongPressElapsed;
+                _longPressTimer.AutoReset = false;
+                _longPressTimer.Start();
+
+                e.Pointer.Capture(OverlayCanvas);
+            }
+        }
+
+        private void SelectRect(Rectangle rect)
+        {
+            // Clear previous selection
+            ClearSelection();
+
+            _selectedRect = rect;
+            _selectedTag = rect.Tag;
+
+            // Highlight selected rect
+            rect.StrokeThickness = 3;
+            rect.Stroke = Brushes.Blue;
+
+            // Draw resize handles
+            DrawResizeHandles(rect);
+        }
+
+        private void ClearSelection()
+        {
+            if (_selectedRect != null)
+            {
+                _selectedRect.StrokeThickness = 2;
+                _selectedRect.Stroke = Brushes.Black;
+            }
+
+            // Remove resize handles
+            foreach (var handle in _resizeHandles)
+            {
+                OverlayCanvas.Children.Remove(handle);
+            }
+            _resizeHandles.Clear();
+
+            _selectedRect = null;
+            _selectedTag = null;
+        }
+
+        private void DrawResizeHandles(Rectangle rect)
+        {
+            const double handleSize = 8;
+            var x = Canvas.GetLeft(rect);
+            var y = Canvas.GetTop(rect);
+            var w = rect.Width;
+            var h = rect.Height;
+
+            // Handle positions: corners and edges
+            var positions = new (double x, double y, string name)[]
+            {
+                (x - handleSize/2, y - handleSize/2, "nw"),
+                (x + w/2 - handleSize/2, y - handleSize/2, "n"),
+                (x + w - handleSize/2, y - handleSize/2, "ne"),
+                (x + w - handleSize/2, y + h/2 - handleSize/2, "e"),
+                (x + w - handleSize/2, y + h - handleSize/2, "se"),
+                (x + w/2 - handleSize/2, y + h - handleSize/2, "s"),
+                (x - handleSize/2, y + h - handleSize/2, "sw"),
+                (x - handleSize/2, y + h/2 - handleSize/2, "w"),
+            };
+
+            foreach (var (hx, hy, name) in positions)
+            {
+                var handle = new Rectangle
+                {
+                    Width = handleSize,
+                    Height = handleSize,
+                    Fill = Brushes.White,
+                    Stroke = Brushes.Blue,
+                    StrokeThickness = 1,
+                    Tag = name,
+                    Cursor = GetResizeCursor(name)
+                };
+
+                handle.PointerPressed += OnResizeHandlePressed;
+
+                Canvas.SetLeft(handle, hx);
+                Canvas.SetTop(handle, hy);
+
+                OverlayCanvas.Children.Add(handle);
+                _resizeHandles.Add(handle);
+            }
+        }
+
+        private Cursor GetResizeCursor(string handle)
+        {
+            return handle switch
+            {
+                "nw" or "se" => new Cursor(StandardCursorType.TopLeftCorner),
+                "ne" or "sw" => new Cursor(StandardCursorType.TopRightCorner),
+                "n" or "s" => new Cursor(StandardCursorType.SizeNorthSouth),
+                "e" or "w" => new Cursor(StandardCursorType.SizeWestEast),
+                _ => new Cursor(StandardCursorType.Arrow)
+            };
+        }
+
+        private void OnResizeHandlePressed(object? sender, PointerPressedEventArgs e)
+        {
+            if (sender is Rectangle handle && _selectedRect != null)
+            {
+                e.Handled = true;
+                _isResizing = true;
+                _resizeHandle = handle.Tag as string;
+                _dragStartPoint = e.GetPosition(OverlayCanvas);
+                _originalRectPosition = new Point(Canvas.GetLeft(_selectedRect), Canvas.GetTop(_selectedRect));
+                _originalRectSize = new Size(_selectedRect.Width, _selectedRect.Height);
+
+                e.Pointer.Capture(OverlayCanvas);
+            }
+        }
+
+        private void OnLongPressElapsed(object? sender, ElapsedEventArgs e)
+        {
+            if (!_hasMoved && _selectedTag != null)
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    if (_selectedRect != null)
+                    {
+                        ShowDeleteContextMenu(_selectedRect, new Point(
+                            Canvas.GetLeft(_selectedRect) + _selectedRect.Width / 2,
+                            Canvas.GetTop(_selectedRect) + _selectedRect.Height / 2));
+                    }
+                });
+            }
+            _longPressTimer?.Stop();
+        }
+
+        private void ShowDeleteContextMenu(Rectangle rect, Point position)
+        {
+            var menu = new ContextMenu();
+            var deleteItem = new MenuItem { Header = "Delete Redaction" };
+            deleteItem.Click += async (s, e) =>
+            {
+                await DeleteSelectedAsync(rect.Tag);
+            };
+            menu.Items.Add(deleteItem);
+
+            menu.Open(this);
+        }
+
+        private async Task DeleteSelectedAsync(object? tag)
+        {
+            if (_viewModel == null || tag == null) return;
+
+            ClearSelection();
+
+            if (tag is Detection detection)
+            {
+                await _viewModel.RejectDetectionAsync(detection);
+            }
+            else if (tag is ManualRedaction redaction)
+            {
+                await _viewModel.DeleteManualRedactionAsync(redaction);
+            }
+
+            DrawOverlays();
+        }
+
+        private void UpdateRectFromDrag(Point currentPoint)
+        {
+            if (_selectedRect == null) return;
+
+            var deltaX = currentPoint.X - _dragStartPoint.X;
+            var deltaY = currentPoint.Y - _dragStartPoint.Y;
+
+            if (_isResizing && _resizeHandle != null)
+            {
+                // Handle resize
+                var newX = _originalRectPosition.X;
+                var newY = _originalRectPosition.Y;
+                var newW = _originalRectSize.Width;
+                var newH = _originalRectSize.Height;
+
+                if (_resizeHandle.Contains('w'))
+                {
+                    newX = _originalRectPosition.X + deltaX;
+                    newW = _originalRectSize.Width - deltaX;
+                }
+                if (_resizeHandle.Contains('e'))
+                {
+                    newW = _originalRectSize.Width + deltaX;
+                }
+                if (_resizeHandle.Contains('n'))
+                {
+                    newY = _originalRectPosition.Y + deltaY;
+                    newH = _originalRectSize.Height - deltaY;
+                }
+                if (_resizeHandle.Contains('s'))
+                {
+                    newH = _originalRectSize.Height + deltaY;
+                }
+
+                // Minimum size
+                if (newW >= 10 && newH >= 10)
+                {
+                    Canvas.SetLeft(_selectedRect, newX);
+                    Canvas.SetTop(_selectedRect, newY);
+                    _selectedRect.Width = newW;
+                    _selectedRect.Height = newH;
+
+                    // Update handle positions
+                    foreach (var handle in _resizeHandles)
+                    {
+                        OverlayCanvas.Children.Remove(handle);
+                    }
+                    _resizeHandles.Clear();
+                    DrawResizeHandles(_selectedRect);
+                }
+            }
+            else if (_isDragging)
+            {
+                // Handle move
+                Canvas.SetLeft(_selectedRect, _originalRectPosition.X + deltaX);
+                Canvas.SetTop(_selectedRect, _originalRectPosition.Y + deltaY);
+
+                // Update handle positions
+                foreach (var handle in _resizeHandles)
+                {
+                    OverlayCanvas.Children.Remove(handle);
+                }
+                _resizeHandles.Clear();
+                DrawResizeHandles(_selectedRect);
+            }
+        }
+
+        private async Task CommitRectChanges()
+        {
+            if (_selectedRect == null || _selectedTag == null || _viewModel == null) return;
+
+            var imageWidth = DisplayImage.Bounds.Width;
+            var imageHeight = DisplayImage.Bounds.Height;
+
+            if (imageWidth <= 0 || imageHeight <= 0) return;
+
+            var newX = Canvas.GetLeft(_selectedRect) / imageWidth;
+            var newY = Canvas.GetTop(_selectedRect) / imageHeight;
+            var newW = _selectedRect.Width / imageWidth;
+            var newH = _selectedRect.Height / imageHeight;
+
+            // Convert Y back to PDF coordinates (flip)
+            var pdfY = 1 - newY - newH;
+
+            if (_selectedTag is Detection detection)
+            {
+                detection.BboxX = newX;
+                detection.BboxY = pdfY;
+                detection.BboxWidth = newW;
+                detection.BboxHeight = newH;
+                await _viewModel.UpdateDetectionAsync(detection);
+            }
+            else if (_selectedTag is ManualRedaction redaction)
+            {
+                redaction.BboxX = newX;
+                redaction.BboxY = pdfY;
+                redaction.BboxWidth = newW;
+                redaction.BboxHeight = newH;
+                await _viewModel.UpdateManualRedactionAsync(redaction);
             }
         }
 
@@ -197,49 +492,115 @@ namespace Redact1.Views
 
         private void Canvas_PointerMoved(object? sender, PointerEventArgs e)
         {
-            if (!_isDrawing || _currentRect == null) return;
+            if (e == null) return;
 
             var currentPoint = e.GetPosition(OverlayCanvas);
 
-            var x = Math.Min(_startPoint.X, currentPoint.X);
-            var y = Math.Min(_startPoint.Y, currentPoint.Y);
-            var width = Math.Abs(currentPoint.X - _startPoint.X);
-            var height = Math.Abs(currentPoint.Y - _startPoint.Y);
+            // Handle drawing new rect
+            if (_isDrawing && _currentRect != null)
+            {
+                var x = Math.Min(_startPoint.X, currentPoint.X);
+                var y = Math.Min(_startPoint.Y, currentPoint.Y);
+                var width = Math.Abs(currentPoint.X - _startPoint.X);
+                var height = Math.Abs(currentPoint.Y - _startPoint.Y);
 
-            Canvas.SetLeft(_currentRect, x);
-            Canvas.SetTop(_currentRect, y);
-            _currentRect.Width = width;
-            _currentRect.Height = height;
+                Canvas.SetLeft(_currentRect, x);
+                Canvas.SetTop(_currentRect, y);
+                _currentRect.Width = width;
+                _currentRect.Height = height;
+                return;
+            }
+
+            // Handle moving/resizing selected rect
+            if ((_isDragging || _isResizing) && _selectedRect != null)
+            {
+                var delta = currentPoint - _dragStartPoint;
+                if (Math.Abs(delta.X) > 3 || Math.Abs(delta.Y) > 3)
+                {
+                    _hasMoved = true;
+                    _longPressTimer?.Stop();
+                }
+
+                UpdateRectFromDrag(currentPoint);
+            }
         }
 
         private async void Canvas_PointerReleased(object? sender, PointerReleasedEventArgs e)
         {
-            if (!_isDrawing || _currentRect == null || _viewModel == null) return;
+            _longPressTimer?.Stop();
+            if (e == null) return;
 
-            _isDrawing = false;
             e.Pointer.Capture(null);
 
-            var imageWidth = DisplayImage.Bounds.Width;
-            var imageHeight = DisplayImage.Bounds.Height;
-
-            if (imageWidth <= 0 || imageHeight <= 0) return;
-
-            var x = Canvas.GetLeft(_currentRect) / imageWidth;
-            var y = Canvas.GetTop(_currentRect) / imageHeight;
-            var width = _currentRect.Width / imageWidth;
-            var height = _currentRect.Height / imageHeight;
-
-            if (width > 0.01 && height > 0.01)
+            // Handle drawing new rect
+            if (_isDrawing && _currentRect != null && _viewModel != null)
             {
-                await _viewModel.AddManualRedaction(x, y, width, height);
-                DrawOverlays();
-            }
-            else
-            {
-                OverlayCanvas.Children.Remove(_currentRect);
+                _isDrawing = false;
+
+                var imageWidth = DisplayImage.Bounds.Width;
+                var imageHeight = DisplayImage.Bounds.Height;
+
+                if (imageWidth > 0 && imageHeight > 0)
+                {
+                    var x = Canvas.GetLeft(_currentRect) / imageWidth;
+                    var y = Canvas.GetTop(_currentRect) / imageHeight;
+                    var width = _currentRect.Width / imageWidth;
+                    var height = _currentRect.Height / imageHeight;
+
+                    if (width > 0.01 && height > 0.01)
+                    {
+                        await _viewModel.AddManualRedaction(x, y, width, height);
+                        DrawOverlays();
+                    }
+                    else
+                    {
+                        OverlayCanvas.Children.Remove(_currentRect);
+                    }
+                }
+
+                _currentRect = null;
+                return;
             }
 
-            _currentRect = null;
+            // Handle end of move/resize
+            if ((_isDragging || _isResizing) && _hasMoved && _selectedRect != null)
+            {
+                await CommitRectChanges();
+            }
+
+            _isDragging = false;
+            _isResizing = false;
+            _resizeHandle = null;
+        }
+
+        private void Canvas_PointerPressed_Background(object? sender, PointerPressedEventArgs e)
+        {
+            // Click on background clears selection
+            if (!_viewModel?.IsDrawingMode == true && _selectedRect != null)
+            {
+                var pos = e.GetPosition(OverlayCanvas);
+                var hitRect = false;
+
+                foreach (var child in OverlayCanvas.Children)
+                {
+                    if (child is Rectangle rect && rect != _selectedRect && !_resizeHandles.Contains(rect))
+                    {
+                        var left = Canvas.GetLeft(rect);
+                        var top = Canvas.GetTop(rect);
+                        if (pos.X >= left && pos.X <= left + rect.Width &&
+                            pos.Y >= top && pos.Y <= top + rect.Height)
+                        {
+                            hitRect = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!hitRect)
+                {
+                    ClearSelection();
+                }
+            }
         }
     }
 }

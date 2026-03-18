@@ -583,7 +583,7 @@ public class ApiServiceTests
         var redaction = new ManualRedaction { Id = "red-1", BboxX = 0.2 };
         SetupResponse(redaction);
 
-        var result = await _apiService.UpdateManualRedactionAsync("red-1", new CreateManualRedactionRequest
+        var result = await _apiService.UpdateManualRedactionAsync("red-1", new UpdateManualRedactionRequest
         {
             BboxX = 0.2
         });

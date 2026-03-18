@@ -395,6 +395,48 @@ namespace Redact1.ViewModels
             }
         }
 
+        public async Task UpdateDetectionAsync(Detection detection)
+        {
+            try
+            {
+                await _apiService.UpdateDetectionAsync(
+                    detection.Id,
+                    new UpdateDetectionRequest
+                    {
+                        BboxX = detection.BboxX,
+                        BboxY = detection.BboxY,
+                        BboxWidth = detection.BboxWidth,
+                        BboxHeight = detection.BboxHeight
+                    }
+                );
+            }
+            catch (Exception ex)
+            {
+                SetError(ex);
+            }
+        }
+
+        public async Task UpdateManualRedactionAsync(ManualRedaction redaction)
+        {
+            try
+            {
+                await _apiService.UpdateManualRedactionAsync(
+                    redaction.Id,
+                    new UpdateManualRedactionRequest
+                    {
+                        BboxX = redaction.BboxX,
+                        BboxY = redaction.BboxY,
+                        BboxWidth = redaction.BboxWidth,
+                        BboxHeight = redaction.BboxHeight
+                    }
+                );
+            }
+            catch (Exception ex)
+            {
+                SetError(ex);
+            }
+        }
+
         private async Task PreviewRedactedAsync()
         {
             if (File == null || _originalFileData == null) return;

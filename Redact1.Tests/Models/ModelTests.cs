@@ -655,7 +655,7 @@ public class UpdateUserRequestTests
 public class UpdateDetectionRequestTests
 {
     [Fact]
-    public void Properties_CanBeSet()
+    public void Status_CanBeSet()
     {
         var request = new UpdateDetectionRequest
         {
@@ -663,6 +663,84 @@ public class UpdateDetectionRequestTests
         };
 
         request.Status.Should().Be("approved");
+    }
+
+    [Fact]
+    public void BboxProperties_CanBeSet()
+    {
+        var request = new UpdateDetectionRequest
+        {
+            BboxX = 0.1,
+            BboxY = 0.2,
+            BboxWidth = 0.3,
+            BboxHeight = 0.4
+        };
+
+        request.BboxX.Should().Be(0.1);
+        request.BboxY.Should().Be(0.2);
+        request.BboxWidth.Should().Be(0.3);
+        request.BboxHeight.Should().Be(0.4);
+    }
+
+    [Fact]
+    public void BboxProperties_AreNullable()
+    {
+        var request = new UpdateDetectionRequest();
+
+        request.BboxX.Should().BeNull();
+        request.BboxY.Should().BeNull();
+        request.BboxWidth.Should().BeNull();
+        request.BboxHeight.Should().BeNull();
+    }
+
+    [Fact]
+    public void Status_IsNullable()
+    {
+        var request = new UpdateDetectionRequest();
+
+        request.Status.Should().BeNull();
+    }
+}
+
+public class UpdateManualRedactionRequestTests
+{
+    [Fact]
+    public void BboxProperties_CanBeSet()
+    {
+        var request = new UpdateManualRedactionRequest
+        {
+            BboxX = 0.1,
+            BboxY = 0.2,
+            BboxWidth = 0.3,
+            BboxHeight = 0.4
+        };
+
+        request.BboxX.Should().Be(0.1);
+        request.BboxY.Should().Be(0.2);
+        request.BboxWidth.Should().Be(0.3);
+        request.BboxHeight.Should().Be(0.4);
+    }
+
+    [Fact]
+    public void BboxProperties_AreNullable()
+    {
+        var request = new UpdateManualRedactionRequest();
+
+        request.BboxX.Should().BeNull();
+        request.BboxY.Should().BeNull();
+        request.BboxWidth.Should().BeNull();
+        request.BboxHeight.Should().BeNull();
+    }
+
+    [Fact]
+    public void DefaultValues_AreNull()
+    {
+        var request = new UpdateManualRedactionRequest();
+
+        request.BboxX.Should().BeNull();
+        request.BboxY.Should().BeNull();
+        request.BboxWidth.Should().BeNull();
+        request.BboxHeight.Should().BeNull();
     }
 }
 

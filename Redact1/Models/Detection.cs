@@ -147,7 +147,34 @@ namespace Redact1.Models
     public class UpdateDetectionRequest
     {
         [JsonPropertyName("status")]
-        public string Status { get; set; } = string.Empty;
+        public string? Status { get; set; }
+
+        [JsonPropertyName("bbox_x")]
+        public double? BboxX { get; set; }
+
+        [JsonPropertyName("bbox_y")]
+        public double? BboxY { get; set; }
+
+        [JsonPropertyName("bbox_width")]
+        public double? BboxWidth { get; set; }
+
+        [JsonPropertyName("bbox_height")]
+        public double? BboxHeight { get; set; }
+    }
+
+    public class UpdateManualRedactionRequest
+    {
+        [JsonPropertyName("bbox_x")]
+        public double? BboxX { get; set; }
+
+        [JsonPropertyName("bbox_y")]
+        public double? BboxY { get; set; }
+
+        [JsonPropertyName("bbox_width")]
+        public double? BboxWidth { get; set; }
+
+        [JsonPropertyName("bbox_height")]
+        public double? BboxHeight { get; set; }
     }
 
     public class CreateManualRedactionRequest

@@ -46,7 +46,7 @@ namespace Redact1.Services
         Task ClearDetectionsAsync(string fileId);
         Task<Detection> UpdateDetectionAsync(string detectionId, UpdateDetectionRequest request);
         Task<ManualRedaction> CreateManualRedactionAsync(string fileId, CreateManualRedactionRequest request);
-        Task<ManualRedaction> UpdateManualRedactionAsync(string redactionId, CreateManualRedactionRequest request);
+        Task<ManualRedaction> UpdateManualRedactionAsync(string redactionId, UpdateManualRedactionRequest request);
         Task DeleteManualRedactionAsync(string redactionId);
 
         // Exports

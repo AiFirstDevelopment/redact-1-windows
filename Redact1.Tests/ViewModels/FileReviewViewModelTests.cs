@@ -1259,4 +1259,123 @@ public class FileReviewViewModelTests : IDisposable
 
         _services.MockApi.Verify(x => x.DeleteManualRedactionAsync(It.IsAny<string>()), Times.Never);
     }
+
+    // UpdateDetectionAsync tests
+    [Fact]
+    public async Task UpdateDetectionAsync_CallsApiWithBboxValues()
+    {
+        var vm = _services.GetService<FileReviewViewModel>();
+
+        var detection = new Detection
+        {
+            Id = "det-1",
+            BboxX = 0.1,
+            BboxY = 0.2,
+            BboxWidth = 0.3,
+            BboxHeight = 0.4
+        };
+
+        _services.MockApi.Setup(x => x.UpdateDetectionAsync(
+            It.IsAny<string>(),
+            It.IsAny<UpdateDetectionRequest>()))
+            .ReturnsAsync(detection);
+
+        await vm.UpdateDetectionAsync(detection);
+
+        _services.MockApi.Verify(x => x.UpdateDetectionAsync(
+            "det-1",
+            It.Is<UpdateDetectionRequest>(r =>
+                r.BboxX == 0.1 &&
+                r.BboxY == 0.2 &&
+                r.BboxWidth == 0.3 &&
+                r.BboxHeight == 0.4)), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateDetectionAsync_WithApiError_SetsError()
+    {
+        var vm = _services.GetService<FileReviewViewModel>();
+
+        _services.MockApi.Setup(x => x.UpdateDetectionAsync(
+            It.IsAny<string>(),
+            It.IsAny<UpdateDetectionRequest>()))
+            .ThrowsAsync(new Exception("API error"));
+
+        var detection = new Detection { Id = "det-1", BboxX = 0.1 };
+
+        await vm.UpdateDetectionAsync(detection);
+
+        vm.ErrorMessage.Should().Contain("API error");
+    }
+
+    // UpdateManualRedactionAsync tests
+    [Fact]
+    public async Task UpdateManualRedactionAsync_CallsApiWithBboxValues()
+    {
+        var vm = _services.GetService<FileReviewViewModel>();
+
+        var redaction = new ManualRedaction
+        {
+            Id = "red-1",
+            BboxX = 0.1,
+            BboxY = 0.2,
+            BboxWidth = 0.3,
+            BboxHeight = 0.4
+        };
+
+        _services.MockApi.Setup(x => x.UpdateManualRedactionAsync(
+            It.IsAny<string>(),
+            It.IsAny<UpdateManualRedactionRequest>()))
+            .ReturnsAsync(redaction);
+
+        await vm.UpdateManualRedactionAsync(redaction);
+
+        _services.MockApi.Verify(x => x.UpdateManualRedactionAsync(
+            "red-1",
+            It.Is<UpdateManualRedactionRequest>(r =>
+                r.BboxX == 0.1 &&
+                r.BboxY == 0.2 &&
+                r.BboxWidth == 0.3 &&
+                r.BboxHeight == 0.4)), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateManualRedactionAsync_WithApiError_SetsError()
+    {
+        var vm = _services.GetService<FileReviewViewModel>();
+
+        _services.MockApi.Setup(x => x.UpdateManualRedactionAsync(
+            It.IsAny<string>(),
+            It.IsAny<UpdateManualRedactionRequest>()))
+            .ThrowsAsync(new Exception("API error"));
+
+        var redaction = new ManualRedaction { Id = "red-1", BboxX = 0.1 };
+
+        await vm.UpdateManualRedactionAsync(redaction);
+
+        vm.ErrorMessage.Should().Contain("API error");
+    }
+
+    [Fact]
+    public async Task UpdateManualRedactionAsync_WithNullBbox_SendsNullValues()
+    {
+        var vm = _services.GetService<FileReviewViewModel>();
+
+        var redaction = new ManualRedaction { Id = "red-1" };
+
+        _services.MockApi.Setup(x => x.UpdateManualRedactionAsync(
+            It.IsAny<string>(),
+            It.IsAny<UpdateManualRedactionRequest>()))
+            .ReturnsAsync(redaction);
+
+        await vm.UpdateManualRedactionAsync(redaction);
+
+        _services.MockApi.Verify(x => x.UpdateManualRedactionAsync(
+            "red-1",
+            It.Is<UpdateManualRedactionRequest>(r =>
+                r.BboxX == null &&
+                r.BboxY == null &&
+                r.BboxWidth == null &&
+                r.BboxHeight == null)), Times.Once);
+    }
 }

@@ -299,7 +299,7 @@ namespace Redact1.Services
             return await PostAsync<ManualRedaction>($"/files/{fileId}/manual-redactions", request);
         }
 
-        public async Task<ManualRedaction> UpdateManualRedactionAsync(string redactionId, CreateManualRedactionRequest request)
+        public async Task<ManualRedaction> UpdateManualRedactionAsync(string redactionId, UpdateManualRedactionRequest request)
         {
             return await PutAsync<ManualRedaction>($"/manual-redactions/{redactionId}", request);
         }
